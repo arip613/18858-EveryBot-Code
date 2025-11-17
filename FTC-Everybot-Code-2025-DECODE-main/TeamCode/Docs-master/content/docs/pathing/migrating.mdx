@@ -1,0 +1,50 @@
+---
+title: Migrating
+description: Migrating to Pedro 2.0.0
+---
+
+import { Callout } from 'fumadocs-ui/components/callout'
+
+Migrating to Pedro 2.0.0 has a few steps. You only need to do these steps if
+you previously used Pedro 1.0.9 or earlier.
+
+## Convert your constants
+
+1. Open the [constants migrator](https://pedro-pathing.github.io/ConstantsConverter/)
+in your browser of choice.
+2. Input your existing `FConstants` and `LConstants` classes into
+the converter.
+3. Click "convert".
+4. Create a `Constants.java` file and paste the output of the
+converter into that class.
+
+<Callout title="Important" type="warning">
+  The constants converter does **not** add the package declaration or
+  imports. You must keep the package declaration and use Android Studio's
+  auto import to add the imports.
+</Callout>
+
+## Add the tuning OpModes
+Copy the [`Tuning.java` file](https://github.com/Pedro-Pathing/Quickstart/blob/master/TeamCode/src/main/java/org/firstinspires/ftc/teamcode/pedroPathing/Tuning.java)
+and place it in your project.
+
+This OpMode contains all the tuners and tests needed to tune Pedro and verify
+that it is correctly working.
+
+To use the OpMode:
+
+1. Initialize the OpMode.
+2. Use a gamepad to navigate through the folders as instructed in telemetry.
+3. Select a tuner/test by pressing the right bumper.
+4. Instructions will be displayed via telemetry.
+5. Press play to start the tuner/test!
+
+## Change how you create Follower
+Instead of directly using the `Follower` constructor, we now use the
+`createFollower` in our `Constants` class.
+
+To create a `Follower`, do:
+
+```java
+follower = Constants.createFollower(hardwareMap);
+```

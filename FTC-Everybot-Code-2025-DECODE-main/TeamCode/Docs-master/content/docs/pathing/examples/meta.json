@@ -1,0 +1,9 @@
+{
+  "pages": [
+    "constants",
+    "auto",
+    "teleop",
+    "apriltags",
+    "apriltagpatternauto"
+  ]
+}

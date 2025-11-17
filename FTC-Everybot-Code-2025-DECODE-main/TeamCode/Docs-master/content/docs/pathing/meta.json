@@ -1,0 +1,20 @@
+{
+  "pages": [
+    "index",
+    "installation",
+    "dashboard",
+    "migrating",
+    "constants",
+    "tuning",
+    "pedro-v-roadrunner",
+    "---Reference---",
+    "...reference",
+    "---Custom---",
+    "...custom",
+    "---Examples---",
+    "...examples"
+  ],
+  "root": true,
+  "title": "Pathing",
+  "description": "Learn to Path"
+}

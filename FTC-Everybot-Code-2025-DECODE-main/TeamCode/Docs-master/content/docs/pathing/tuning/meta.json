@@ -1,0 +1,10 @@
+{
+  "pages": [
+    "setup",
+    "localization",
+    "automatic",
+    "pids",
+    "tests",
+    "troubleshooting"
+  ]
+}
