@@ -156,7 +156,7 @@ public class TeleOpControlLinearOpMode extends LinearOpMode {
         intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         catapult1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         catapult2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
-      foot.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        foot.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
         // Wait for the game to start (driver presses START)
         telemetry.addData("Status", "Initialized");
@@ -175,10 +175,10 @@ public class TeleOpControlLinearOpMode extends LinearOpMode {
             double max;
 
             // POV Mode uses left joystick to go forward & strafe, and right joystick to rotate.
-            //axial = speed, lateral = turn, yaw = strafe
-            double axial = -gamepad1.left_stick_y;  // Note: pushing stick forward gives negative value
-            double lateral = -gamepad1.right_stick_x;
-            double yaw = -gamepad1.left_stick_x;
+            // FIXED: Swapped lateral and yaw to match standard POV controls
+            double axial = -gamepad1.left_stick_y;  // Forward/backward - Note: pushing stick forward gives negative value
+            double lateral = -gamepad1.left_stick_x;  // Strafe left/right
+            double yaw = -gamepad1.right_stick_x;  // Rotate clockwise/counterclockwise
 
             boolean intakeInButton = gamepad1.left_trigger > 0.2;
             boolean intakeOutButton = gamepad1.left_bumper;
@@ -190,7 +190,7 @@ public class TeleOpControlLinearOpMode extends LinearOpMode {
 
             boolean footOutButton = gamepad1.a;
             boolean footUpButton = gamepad1.b;
-           if (footOutButton && footUpButton) {
+            if (footOutButton && footUpButton) {
                 footOutButton = false;
             }
 
@@ -295,7 +295,7 @@ public class TeleOpControlLinearOpMode extends LinearOpMode {
             telemetry.addData("Status", "Run Time: " + runtime.toString());
             telemetry.addData("Front left/Right", "%4.2f, %4.2f", leftFrontPower, rightFrontPower);
             telemetry.addData("Back  left/Right", "%4.2f, %4.2f", leftBackPower, rightBackPower);
-            telemetry.addData("Intake", "%%4.2f", intake.getPower());
+            telemetry.addData("Intake", "%4.2f", intake.getPower());
             telemetry.addData("Foot Power", "%4.2f", foot.getPower());
             telemetry.addData("Foot MODE", "%s", footmode);
             telemetry.addData("Catapult1 Current/Target/power", "%d, %d, %4.2f",
