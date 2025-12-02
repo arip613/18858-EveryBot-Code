@@ -66,7 +66,7 @@ public class BLUE_TELEOP extends OpMode {
 
     private boolean autoDownActive = false;
     private boolean wasUpButtonPressed = false;
-    private static final double AUTO_DOWN_DURATION = 0.15;
+    private static final double AUTO_DOWN_DURATION = 0.1;
 
     private enum CatapultModes {UP, DOWN, HOLD}
     private CatapultModes pivotMode;

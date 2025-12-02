@@ -262,18 +262,24 @@ public class RED_AUTO extends OpMode {
                 }
                 break;
 
-            case 16:
-                if(!follower.isBusy()) {
-                    launch();
-                    setPathState(17);
+            case 17:
+                if(isCatapultReady()) {
+                    catapultMode = CatapultModes.DOWN;
+                    catapult1.setPower(CATAPULT_DOWN_POWER);
+                    catapult2.setPower(CATAPULT_DOWN_POWER);
+                    catapultDownTimer.resetTimer();
+                    setPathState(18);
                 }
                 break;
 
-            case 17:
-                if(isCatapultReady()) {
+            case 18:
+                if(catapultDownTimer.getElapsedTimeSeconds() > 0.15) {
+                    catapultMode = CatapultModes.HOLD;
+                    catapult1.setPower(CATAPULT_HOLD_POWER);
+                    catapult2.setPower(CATAPULT_HOLD_POWER);
+                    intake.setPower(INTAKE_OFF_POWER);
                     setPathState(-1);
                 }
-                break;
         }
     }
 
