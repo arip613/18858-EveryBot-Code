@@ -1,10 +1,12 @@
-package org.firstinspires.ftc.teamcode.Teleop;
+package org.firstinspires.ftc.teamcode.Tests;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
+import com.pedropathing.ftc.FTCCoordinates;
 import com.pedropathing.geometry.BezierLine;
+import com.pedropathing.geometry.PedroCoordinates;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.HeadingInterpolator;
 import com.pedropathing.paths.Path;
@@ -14,17 +16,56 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.util.ElapsedTime;
 import com.qualcomm.hardware.limelightvision.Limelight3A;
+import com.qualcomm.hardware.limelightvision.LLResult;
 
-
+import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.function.Supplier;
 
 @Configurable
-@TeleOp(name = "RED TELEOP", group = "Teleop")
-public class RED_TELEOP extends OpMode {
+@TeleOp(name = "LIMELIGHT WITH RED", group = "Teleop")
+public class LLRED extends OpMode {
+
+    // Kalman Filter
+    private static class KalmanFilter {
+        private double processNoise;
+        private double measurementNoise;
+        private double estimation;
+        private double errorCovariance;
+
+        public KalmanFilter(double processNoise, double measurementNoise, double initialEstimate) {
+            this.processNoise = processNoise;
+            this.measurementNoise = measurementNoise;
+            this.estimation = initialEstimate;
+            this.errorCovariance = 1;
+        }
+
+        public double update(double measurement, double prediction) {
+            // Prediction step
+            double predictedEstimate = prediction;
+            double predictedCovariance = errorCovariance + processNoise;
+
+            // Update step
+            double kalmanGain = predictedCovariance / (predictedCovariance + measurementNoise);
+            estimation = predictedEstimate + kalmanGain * (measurement - predictedEstimate);
+            errorCovariance = (1 - kalmanGain) * predictedCovariance;
+
+            return estimation;
+        }
+
+        public void reset(double value) {
+            this.estimation = value;
+            this.errorCovariance = 1;
+        }
+    }
+
+    private KalmanFilter xFilter;
+    private KalmanFilter yFilter;
+    private KalmanFilter headingFilter;
 
     private ElapsedTime runtime = new ElapsedTime();
+    private Limelight3A camera;
     private ElapsedTime catatime = new ElapsedTime();
     private ElapsedTime autoDownTimer = new ElapsedTime();
     private ElapsedTime setpointLaunchTimer = new ElapsedTime();
@@ -38,6 +79,9 @@ public class RED_TELEOP extends OpMode {
     private TelemetryManager telemetryM;
     private boolean slowMode = false;
 
+    // Limelight odometry variables
+    private boolean useLimelightOdometry = true;
+
     private boolean setpointNavActive = false;
     private boolean setpointReached = false;
     private Pose targetSetpoint = new Pose(118.537, 119.634, Math.toRadians(37));
@@ -50,37 +94,34 @@ public class RED_TELEOP extends OpMode {
     private boolean targetTwoReached = false;
     private Pose targetTwoSetpoint = new Pose(112.390, 114.585, Math.toRadians(37));
 
-    // Gate setpoint (B button)
     private boolean gateNavActive = false;
     private boolean gateReached = false;
     private Pose gateSetpoint = new Pose(128.657, 69.041, Math.toRadians(90));
 
-    private static final double SETPOINT_TOLERANCE = 2; // inches
+    private static final double SETPOINT_TOLERANCE = 2;
 
-    // Park setpoint variables
     private boolean parkNavActive = false;
     private boolean parkReached = false;
     private Pose parkSetpoint = new Pose(45.151, 40.329, Math.toRadians(180));
     private Pose gateWaypoint = new Pose(120.73170731707316, 71.34146341463415, Math.toRadians(180));
 
-
     private boolean parkFootActive = false;
     private static final double PARK_FOOT_DURATION = 2;
 
     private enum LaunchState {IDLE, LAUNCHING_UP, LAUNCHING_DOWN, LAUNCHING_HOLD}
+
     private LaunchState launchState = LaunchState.IDLE;
     private static final double LAUNCH_UP_DURATION = 0.1;
     private static final double LAUNCH_DOWN_DURATION = 0.25;
 
     private boolean startupCatapultActive = true;
-    private static final double STARTUP_DOWN_DURATION = 0.25;
+    private static final double STARTUP_DOWN_DURATION = 0.15;
 
     private DcMotor intake = null;
     private DcMotor catapult1 = null;
     private DcMotor catapult2 = null;
     private DcMotor foot = null;
 
-    // Intake power constants
     private double INTAKE_IN_POWER = -1;
     private double INTAKE_OUT_POWER = 1;
     private double INTAKE_OFF_POWER = 0.0;
@@ -108,16 +149,20 @@ public class RED_TELEOP extends OpMode {
     @Override
     public void init() {
         telemetry.addData("Status", "Initializing");
-
+        camera = hardwareMap.get(Limelight3A.class, "limelight");
 
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startingPose == null ? new Pose() : startingPose);
         follower.update();
+
+        Pose initialPose = follower.getPose();
+        xFilter = new KalmanFilter(0.25, 0.75, initialPose.getX());
+        yFilter = new KalmanFilter(0.25, 0.75, initialPose.getY());
+        headingFilter = new KalmanFilter(0.25, 0.75, initialPose.getHeading());
+
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
 
-
         intake = hardwareMap.get(DcMotor.class, "intake");
-
         catapult1 = hardwareMap.get(DcMotor.class, "catapult1");
         catapult2 = hardwareMap.get(DcMotor.class, "catapult2");
         foot = hardwareMap.get(DcMotor.class, "foot");
@@ -139,7 +184,7 @@ public class RED_TELEOP extends OpMode {
     @Override
     public void start() {
         follower.startTeleopDrive();
-
+        camera.start();
 
         runtime.reset();
         catatime.reset();
@@ -151,6 +196,10 @@ public class RED_TELEOP extends OpMode {
     public void loop() {
         follower.update();
         telemetryM.update();
+
+        if (useLimelightOdometry) {
+            updateOdometryFromLimelight();
+        }
 
         if (startupCatapultActive) {
             if (startupCatapultTimer.seconds() < STARTUP_DOWN_DURATION) {
@@ -168,11 +217,13 @@ public class RED_TELEOP extends OpMode {
         if (gamepad1.back) {
             Pose currentPose = follower.getPose();
             follower.setPose(new Pose(currentPose.getX(), currentPose.getY(), 180));
+            headingFilter.reset(Math.toRadians(180));
         }
 
         if (gamepad1.start) {
             Pose currentPose = follower.getPose();
             follower.setPose(new Pose(currentPose.getX(), currentPose.getY(), 0));
+            headingFilter.reset(0);
         }
 
         boolean driverInput = Math.abs(gamepad1.left_stick_y) > 0.1 ||
@@ -213,7 +264,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = true;
         }
 
-        // Target two setpoint navigation (X button)
         if (gamepad1.x && !anyLaunchNavActive && !parkNavActive) {
             PathChain targetTwoPath = follower.pathBuilder()
                     .addPath(new Path(new BezierLine(follower::getPose, targetTwoSetpoint)))
@@ -230,9 +280,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = true;
         }
 
-        // Gate setpoint navigation (B button)
-
-        // Park setpoint navigation (D-pad left or right)
         if (gamepad1.b && !anyLaunchNavActive && !parkNavActive) {
             PathChain gatePath = follower.pathBuilder()
                     .addPath(new Path(new BezierLine(new Pose(follower.getPose().getX(), follower.getPose().getY(), follower.getHeading()), gateWaypoint)))
@@ -250,7 +297,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = true;
         }
 
-        // Cancel original setpoint navigation on driver input
         if (setpointNavActive && driverInput) {
             follower.startTeleopDrive();
             setpointNavActive = false;
@@ -259,7 +305,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Cancel target one navigation on driver input
         if (targetOneNavActive && driverInput) {
             follower.startTeleopDrive();
             targetOneNavActive = false;
@@ -268,7 +313,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Cancel target two navigation on driver input
         if (targetTwoNavActive && driverInput) {
             follower.startTeleopDrive();
             targetTwoNavActive = false;
@@ -277,7 +321,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Cancel gate navigation on driver input
         if (gateNavActive && driverInput) {
             follower.startTeleopDrive();
             gateNavActive = false;
@@ -286,7 +329,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Cancel park navigation on driver input
         if (parkNavActive && driverInput) {
             follower.startTeleopDrive();
             parkNavActive = false;
@@ -295,7 +337,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Check if original launch setpoint reached
         if (setpointNavActive && !setpointReached) {
             double distanceToTarget = Math.hypot(
                     follower.getPose().getX() - targetSetpoint.getX(),
@@ -304,12 +345,17 @@ public class RED_TELEOP extends OpMode {
 
             if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
                 setpointReached = true;
+
+                if (useLimelightOdometry) {
+                    updateOdometryFromLimelight();
+                    telemetry.addData("LL Update", "Position corrected at Y setpoint");
+                }
+
                 launchState = LaunchState.LAUNCHING_UP;
                 setpointLaunchTimer.reset();
             }
         }
 
-        // Check if target one setpoint reached
         if (targetOneNavActive && !targetOneReached) {
             double distanceToTarget = Math.hypot(
                     follower.getPose().getX() - targetOneSetpoint.getX(),
@@ -318,12 +364,17 @@ public class RED_TELEOP extends OpMode {
 
             if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
                 targetOneReached = true;
+
+                if (useLimelightOdometry) {
+                    updateOdometryFromLimelight();
+                    telemetry.addData("LL Update", "Position corrected at A setpoint");
+                }
+
                 launchState = LaunchState.LAUNCHING_UP;
                 setpointLaunchTimer.reset();
             }
         }
 
-        // Check if target two setpoint reached
         if (targetTwoNavActive && !targetTwoReached) {
             double distanceToTarget = Math.hypot(
                     follower.getPose().getX() - targetTwoSetpoint.getX(),
@@ -332,12 +383,17 @@ public class RED_TELEOP extends OpMode {
 
             if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
                 targetTwoReached = true;
+
+                if (useLimelightOdometry) {
+                    updateOdometryFromLimelight();
+                    telemetry.addData("LL Update", "Position corrected at X setpoint");
+                }
+
                 launchState = LaunchState.LAUNCHING_UP;
                 setpointLaunchTimer.reset();
             }
         }
 
-        // Check if gate setpoint reached
         if (gateNavActive && !gateReached) {
             double distanceToTarget = Math.hypot(
                     follower.getPose().getX() - gateSetpoint.getX(),
@@ -346,12 +402,17 @@ public class RED_TELEOP extends OpMode {
 
             if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
                 gateReached = true;
+
+                if (useLimelightOdometry) {
+                    updateOdometryFromLimelight();
+                    telemetry.addData("LL Update", "Position corrected at B setpoint");
+                }
+
                 launchState = LaunchState.LAUNCHING_UP;
                 setpointLaunchTimer.reset();
             }
         }
 
-        // Check if park setpoint reached
         if (parkNavActive && !parkReached) {
             double distanceToPark = Math.hypot(
                     follower.getPose().getX() - parkSetpoint.getX(),
@@ -365,7 +426,6 @@ public class RED_TELEOP extends OpMode {
             }
         }
 
-        // Handle launch sequence when any setpoint reached
         boolean anySetpointReached = setpointReached || targetOneReached || targetTwoReached || gateReached;
         if (anySetpointReached) {
             switch (launchState) {
@@ -383,7 +443,6 @@ public class RED_TELEOP extends OpMode {
                     catapult2.setPower(CATAPULT_DOWN_POWER);
                     if (setpointLaunchTimer.seconds() >= LAUNCH_DOWN_DURATION) {
                         launchState = LaunchState.LAUNCHING_HOLD;
-                        // Reset all launch navigation states
                         setpointNavActive = false;
                         setpointReached = false;
                         targetOneNavActive = false;
@@ -407,19 +466,22 @@ public class RED_TELEOP extends OpMode {
             }
         }
 
-
-        // Manual drive control
-        if (!automatedDrive && !anyLaunchNavActive && !parkNavActive) {
-
-                follower.setTeleOpDrive(
-                        -gamepad1.left_stick_y,
-                        -gamepad1.left_stick_x,
-                        -gamepad1.right_stick_x,
-                        false // false = field centric
-                );
+        if (parkReached && parkFootActive) {
+            parkNavActive = false;
+            parkReached = false;
+            automatedDrive = false;
+            follower.startTeleopDrive();
         }
 
-        // Cancel automated drive
+        if (!automatedDrive && !anyLaunchNavActive && !parkNavActive) {
+            follower.setTeleOpDrive(
+                    -gamepad1.left_stick_y,
+                    -gamepad1.left_stick_x,
+                    -gamepad1.right_stick_x,
+                    false
+            );
+        }
+
         if (automatedDrive && !anyLaunchNavActive && !parkNavActive && !follower.isBusy()) {
             follower.startTeleopDrive();
             automatedDrive = false;
@@ -429,7 +491,6 @@ public class RED_TELEOP extends OpMode {
             slowMode = !slowMode;
         }
 
-        // Manual control (only when not in automated sequences and startup is complete)
         if (!anySetpointReached && !parkReached && !startupCatapultActive) {
             boolean intakeInButton = gamepad1.left_trigger > 0.2;
             boolean intakeOutButton = gamepad1.left_bumper;
@@ -491,7 +552,6 @@ public class RED_TELEOP extends OpMode {
                 foot.setPower(footPower);
             }
         } else if (anySetpointReached) {
-            // Allow intake and foot control during launch sequence
             boolean intakeInButton = gamepad1.left_trigger > 0.2;
             boolean footOutButton = gamepad1.a;
 
@@ -533,31 +593,56 @@ public class RED_TELEOP extends OpMode {
         if (gateNavActive) activeTarget = "GATE";
         if (parkNavActive) activeTarget = "PARK";
 
-        telemetry.addData("Status", "Run Time: " + runtime.toString());
-        telemetry.addData("Slow Mode", slowMode ? "ON" : "OFF");
-        telemetry.addData("Startup Catapult Active", startupCatapultActive);
-        telemetry.addData("Active Target", activeTarget);
-        telemetry.addData("Setpoint Reached", setpointReached);
-        telemetry.addData("Target One Reached", targetOneReached);
-        telemetry.addData("Target Two Reached", targetTwoReached);
-        telemetry.addData("Gate Reached", gateReached);
-        telemetry.addData("Park Reached", parkReached);
-        telemetry.addData("Launch State", launchState);
-        telemetry.addData("Automated Drive", automatedDrive);
-        telemetry.addData("Auto Down Active", autoDownActive);
-        telemetry.addData("Position", follower.getPose());
-        telemetry.addData("Velocity", follower.getVelocity());
-        telemetry.addData("Intake Power", "%.2f", intake.getPower());
-        telemetry.addData("Foot Power/Mode", "%.2f, %s", foot.getPower(), footmode);
-        telemetry.addData("Catapult1 Pos/Power", "%d, %.2f",
-                catapult1.getCurrentPosition(), catapult1.getPower());
-        telemetry.addData("Catapult2 Pos/Power", "%d, %.2f",
-                catapult2.getCurrentPosition(), catapult2.getPower());
-        telemetry.addData("Catapult Mode", catapult_mode_str);
-        telemetry.update();
+        boolean canSeeAprilTag = false;
+        int visibleTagCount = 0;
+        try {
+            LLResult result = camera.getLatestResult();
+            if (result != null && result.isValid()) {
+                visibleTagCount = result.getBotposeTagCount();
+                canSeeAprilTag = visibleTagCount > 0;
+            }
+        } catch (Exception e) {
+        }
 
+        telemetry.addData("AprilTag Visible", canSeeAprilTag ? "YES" : "NO");
+        telemetry.addData("Tags Detected", visibleTagCount);
+        telemetry.addData("Limelight Odom", useLimelightOdometry ? "ENABLED" : "DISABLED");
+        telemetry.addData("Position", follower.getPose());
+        telemetry.update();
         telemetryM.debug("position", follower.getPose());
-        telemetryM.debug("velocity", follower.getVelocity());
-        telemetryM.debug("activeTarget", activeTarget);
+    }
+
+
+    private void updateOdometryFromLimelight() {
+        try {
+            // Get current odometry prediction from wheels
+            Pose currentPose = follower.getPose();
+
+            LLResult result = camera.getLatestResult();
+
+            if (result != null && result.isValid()) {
+                Pose3D botpose = result.getBotpose();
+                if (botpose != null) {
+                    int tagCount = result.getBotposeTagCount();
+
+                    if (tagCount > 0) {
+                        double x = botpose.getPosition().x;
+                        double y = botpose.getPosition().y;
+                        double heading = Math.toRadians(botpose.getOrientation().getYaw());
+
+                        Pose limelightPose = new Pose(x, y, heading, FTCCoordinates.INSTANCE)
+                                .getAsCoordinateSystem(PedroCoordinates.INSTANCE);
+
+                        // Kalman filter fuses odometry prediction with Limelight measurement
+                        double fusedX = xFilter.update(limelightPose.getX(), currentPose.getX());
+                        double fusedY = yFilter.update(limelightPose.getY(), currentPose.getY());
+                        double fusedHeading = headingFilter.update(limelightPose.getHeading(), currentPose.getHeading());
+
+                        follower.setPose(new Pose(fusedX, fusedY, fusedHeading));
+                    }
+                }
+            }
+        } catch (Exception e) {
+        }
     }
 }

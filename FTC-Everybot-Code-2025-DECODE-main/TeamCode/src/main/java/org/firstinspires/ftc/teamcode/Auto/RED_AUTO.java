@@ -39,20 +39,20 @@ public class RED_AUTO extends OpMode {
     private Timer catapultDownTimer;
 
     private int pathState;
-    private final Pose startPose = new Pose(105.805, 134.780, Math.toRadians(90));
-    private final Pose scorePose = new Pose(118.537, 119.634, Math.toRadians(37));
+    private final Pose startPose = new Pose(111.232, 135.752, Math.toRadians(90));
+    private final Pose scorePose = new Pose(117.21951219512195, 118.7560975609756, Math.toRadians(37));
 
-    private final Pose pickup0Pose= new Pose(118.537, 119.634, Math.toRadians(37));
+    private final Pose pickup0Pose= new Pose(113.92682926829268, 121.17073170731707, Math.toRadians(37));
 
-    private final Pose pickup1Pose = new Pose(95, 84, Math.toRadians(0));
-    private final Pose pickup1EndPose = new Pose(128, 84, Math.toRadians(0));
+    private final Pose pickup1Pose = new Pose(95, 88, Math.toRadians(0));
+    private final Pose pickup1EndPose = new Pose(128, 88, Math.toRadians(0));
 
-    private final Pose pickup2Pose = new Pose(95, 60, Math.toRadians(0));
-    private final Pose pickup2EndPose = new Pose(134, 60, Math.toRadians(0));
+    private final Pose pickup2Pose = new Pose(95, 65, Math.toRadians(0));
+    private final Pose pickup2EndPose = new Pose(134, 65, Math.toRadians(0));
     private final Pose pickup2EndAvoidPose = new Pose(112, 60, Math.toRadians(0));
 
-    private final Pose pickup3Pose = new Pose(95, 37, Math.toRadians(0));
-    private final Pose pickup3EndPose = new Pose(134, 37, Math.toRadians(0));
+    private final Pose pickup3Pose = new Pose(95, 41, Math.toRadians(0));
+    private final Pose pickup3EndPose = new Pose(134, 41, Math.toRadians(0));
 
     private PathChain startToPickup0;
     private PathChain pickup0ToPickup1, pickup1ToPickup1End, pickup1EndToScore;
@@ -124,6 +124,7 @@ public class RED_AUTO extends OpMode {
                 .build();
     }
 
+
     private void launch() {
         catapultMode = CatapultModes.UP;
         catapult1.setPower(CATAPULT_UP_POWER);
@@ -132,12 +133,12 @@ public class RED_AUTO extends OpMode {
     }
 
     private void updateCatapult() {
-        if (catapultMode == CatapultModes.UP && catapultUpTimer.getElapsedTimeSeconds() > 0.5) {
+        if (catapultMode == CatapultModes.UP && catapultUpTimer.getElapsedTimeSeconds() > 0.15) {
             catapultMode = CatapultModes.DOWN;
             catapult1.setPower(CATAPULT_DOWN_POWER);
             catapult2.setPower(CATAPULT_DOWN_POWER);
             catapultDownTimer.resetTimer();
-        } else if (catapultMode == CatapultModes.DOWN && catapultDownTimer.getElapsedTimeSeconds() > 0.15) {
+        } else if (catapultMode == CatapultModes.DOWN && catapultDownTimer.getElapsedTimeSeconds() > 0.2) {
             catapultMode = CatapultModes.HOLD;
             catapult1.setPower(CATAPULT_HOLD_POWER);
             catapult2.setPower(CATAPULT_HOLD_POWER);
@@ -262,24 +263,26 @@ public class RED_AUTO extends OpMode {
                 }
                 break;
 
+            case 16:
+                if(!follower.isBusy()) {
+                    launch();
+                    setPathState(17);
+                }
+                break;
+
             case 17:
                 if(isCatapultReady()) {
-                    catapultMode = CatapultModes.DOWN;
-                    catapult1.setPower(CATAPULT_DOWN_POWER);
-                    catapult2.setPower(CATAPULT_DOWN_POWER);
-                    catapultDownTimer.resetTimer();
+                    follower.followPath(scoreToPickup2, true);
                     setPathState(18);
                 }
                 break;
 
             case 18:
-                if(catapultDownTimer.getElapsedTimeSeconds() > 0.15) {
-                    catapultMode = CatapultModes.HOLD;
-                    catapult1.setPower(CATAPULT_HOLD_POWER);
-                    catapult2.setPower(CATAPULT_HOLD_POWER);
+                if(!follower.isBusy()) {
                     intake.setPower(INTAKE_OFF_POWER);
                     setPathState(-1);
                 }
+                break;
         }
     }
 

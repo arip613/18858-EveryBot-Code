@@ -44,29 +44,25 @@ public class BLUE_AUTO extends OpMode {
     private Timer catapultDownTimer;
 
     private int pathState;
-    private final Pose startPose = new Pose(105.805, 134.780, Math.toRadians(90)).mirror();
-    private final Pose scorePose = new Pose(114.585, 123.805, Math.toRadians(38)).mirror();
+    private final Pose startPose = new Pose(111.232, 135.752, Math.toRadians(90)).mirror();
+    private final Pose scorePose = new Pose(117.21951219512195, 118.7560975609756, Math.toRadians(37)).mirror();
 
-    private final Pose pickup0Pose= new Pose(114.585, 123.805, Math.toRadians(38)).mirror();
+    private final Pose pickup0Pose= new Pose(113.92682926829268, 121.17073170731707, Math.toRadians(37)).mirror();
 
-    // Pickup 1 poses
-    private final Pose pickup1Pose = new Pose(95, 83, Math.toRadians(0)).mirror();
-    private final Pose pickup1EndPose = new Pose(128, 83, Math.toRadians(0)).mirror();
+    private final Pose pickup1Pose = new Pose(95, 88, Math.toRadians(0)).mirror();
+    private final Pose pickup1EndPose = new Pose(128, 88, Math.toRadians(0)).mirror();
 
-    // Pickup 2 poses
-    private final Pose pickup2Pose = new Pose(95, 60, Math.toRadians(0)).mirror();
-    private final Pose pickup2EndPose = new Pose(134, 60, Math.toRadians(0)).mirror();
+    private final Pose pickup2Pose = new Pose(95, 65, Math.toRadians(0)).mirror();
+    private final Pose pickup2EndPose = new Pose(134, 65, Math.toRadians(0)).mirror();
     private final Pose pickup2EndAvoidPose = new Pose(112, 60, Math.toRadians(0)).mirror();
 
-    // Pickup 3 poses
-    private final Pose pickup3Pose = new Pose(95, 37, Math.toRadians(0)).mirror();
-    private final Pose pickup3EndPose = new Pose(134, 37, Math.toRadians(0)).mirror();
+    private final Pose pickup3Pose = new Pose(95, 41, Math.toRadians(0)).mirror();
+    private final Pose pickup3EndPose = new Pose(134, 41, Math.toRadians(0)).mirror();
 
-    // Path declarations
     private PathChain startToPickup0;
     private PathChain pickup0ToPickup1, pickup1ToPickup1End, pickup1EndToScore;
     private PathChain scoreToPickup2, pickup2ToPickup2End, pickup2EndToPickup2EndAvoid, pickup2EndAvoidToScore;
-    private PathChain scoreToPickup3, pickup3ToPickup3End, pickup3EndToPickup3, pickup3ToScore;
+    private PathChain scoreToPickup3, pickup3ToPickup3End, pickup3EndToPickup3, pickup3ToScore, pickup3EndToPickup2;
 
     public void buildPaths() {
         // START TO PICKUP 0
@@ -147,12 +143,12 @@ public class BLUE_AUTO extends OpMode {
     }
 
     private void updateCatapult() {
-        if (catapultMode == CatapultModes.UP && catapultUpTimer.getElapsedTimeSeconds() > 0.5) {
+        if (catapultMode == CatapultModes.UP && catapultUpTimer.getElapsedTimeSeconds() > 0.15) {
             catapultMode = CatapultModes.DOWN;
             catapult1.setPower(CATAPULT_DOWN_POWER);
             catapult2.setPower(CATAPULT_DOWN_POWER);
             catapultDownTimer.resetTimer();
-        } else if (catapultMode == CatapultModes.DOWN && catapultDownTimer.getElapsedTimeSeconds() > 0.15) {
+        } else if (catapultMode == CatapultModes.DOWN && catapultDownTimer.getElapsedTimeSeconds() > 0.2) {
             catapultMode = CatapultModes.HOLD;
             catapult1.setPower(CATAPULT_HOLD_POWER);
             catapult2.setPower(CATAPULT_HOLD_POWER);
@@ -175,7 +171,7 @@ public class BLUE_AUTO extends OpMode {
 
             case 1:
                 // Wait at Pickup 0, then launch first shot
-                if(!follower.isBusy()) {
+                if(!follower.isBusy() && pathTimer.getElapsedTimeSeconds() > 0.35) {
                     launch();
                     setPathState(2);
                 }
@@ -286,7 +282,7 @@ public class BLUE_AUTO extends OpMode {
                 // Pickup 3 -> Score
                 if(!follower.isBusy()) {
                     follower.followPath(pickup3ToScore, true);
-                    setPathState(16);
+                    setPathState(16); //jerk off really hard
                 }
                 break;
 
@@ -300,22 +296,17 @@ public class BLUE_AUTO extends OpMode {
 
             case 17:
                 if(isCatapultReady()) {
-                    catapultMode = CatapultModes.DOWN;
-                    catapult1.setPower(CATAPULT_DOWN_POWER);
-                    catapult2.setPower(CATAPULT_DOWN_POWER);
-                    catapultDownTimer.resetTimer();
+                    follower.followPath(scoreToPickup2, true);
                     setPathState(18);
                 }
                 break;
 
             case 18:
-                if(catapultDownTimer.getElapsedTimeSeconds() > 0.15) {
-                    catapultMode = CatapultModes.HOLD;
-                    catapult1.setPower(CATAPULT_HOLD_POWER);
-                    catapult2.setPower(CATAPULT_HOLD_POWER);
+                if(!follower.isBusy()) {
                     intake.setPower(INTAKE_OFF_POWER);
                     setPathState(-1);
                 }
+                break;
         }
     }
 
