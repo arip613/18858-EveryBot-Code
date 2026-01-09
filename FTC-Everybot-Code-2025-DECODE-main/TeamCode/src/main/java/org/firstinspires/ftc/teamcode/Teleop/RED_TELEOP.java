@@ -70,13 +70,15 @@ public class RED_TELEOP extends OpMode {
     private enum LaunchState {IDLE, LAUNCHING_UP, LAUNCHING_DOWN, LAUNCHING_HOLD}
     private LaunchState launchState = LaunchState.IDLE;
     private static final double LAUNCH_UP_DURATION = 0.1;
-    private static final double LAUNCH_DOWN_DURATION = 0.25;
+    private static final double LAUNCH_DOWN_DURATION = 0.4;
 
     private boolean startupCatapultActive = true;
     private static final double STARTUP_DOWN_DURATION = 0.25;
 
     private DcMotor intake = null;
     private DcMotor catapult1 = null;
+    private DcMotor foot1 = null;
+
     private DcMotor catapult2 = null;
     private DcMotor foot = null;
 
@@ -213,7 +215,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = true;
         }
 
-        // Target two setpoint navigation (X button)
         if (gamepad1.x && !anyLaunchNavActive && !parkNavActive) {
             PathChain targetTwoPath = follower.pathBuilder()
                     .addPath(new Path(new BezierLine(follower::getPose, targetTwoSetpoint)))
@@ -230,9 +231,7 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = true;
         }
 
-        // Gate setpoint navigation (B button)
 
-        // Park setpoint navigation (D-pad left or right)
         if (gamepad1.b && !anyLaunchNavActive && !parkNavActive) {
             PathChain gatePath = follower.pathBuilder()
                     .addPath(new Path(new BezierLine(new Pose(follower.getPose().getX(), follower.getPose().getY(), follower.getHeading()), gateWaypoint)))
@@ -250,7 +249,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = true;
         }
 
-        // Cancel original setpoint navigation on driver input
         if (setpointNavActive && driverInput) {
             follower.startTeleopDrive();
             setpointNavActive = false;
@@ -259,7 +257,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Cancel target one navigation on driver input
         if (targetOneNavActive && driverInput) {
             follower.startTeleopDrive();
             targetOneNavActive = false;
@@ -268,7 +265,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Cancel target two navigation on driver input
         if (targetTwoNavActive && driverInput) {
             follower.startTeleopDrive();
             targetTwoNavActive = false;
@@ -277,7 +273,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Cancel gate navigation on driver input
         if (gateNavActive && driverInput) {
             follower.startTeleopDrive();
             gateNavActive = false;
@@ -286,7 +281,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Cancel park navigation on driver input
         if (parkNavActive && driverInput) {
             follower.startTeleopDrive();
             parkNavActive = false;
@@ -295,7 +289,6 @@ public class RED_TELEOP extends OpMode {
             automatedDrive = false;
         }
 
-        // Check if original launch setpoint reached
         if (setpointNavActive && !setpointReached) {
             double distanceToTarget = Math.hypot(
                     follower.getPose().getX() - targetSetpoint.getX(),
@@ -309,7 +302,6 @@ public class RED_TELEOP extends OpMode {
             }
         }
 
-        // Check if target one setpoint reached
         if (targetOneNavActive && !targetOneReached) {
             double distanceToTarget = Math.hypot(
                     follower.getPose().getX() - targetOneSetpoint.getX(),
@@ -323,7 +315,6 @@ public class RED_TELEOP extends OpMode {
             }
         }
 
-        // Check if target two setpoint reached
         if (targetTwoNavActive && !targetTwoReached) {
             double distanceToTarget = Math.hypot(
                     follower.getPose().getX() - targetTwoSetpoint.getX(),
@@ -337,7 +328,6 @@ public class RED_TELEOP extends OpMode {
             }
         }
 
-        // Check if gate setpoint reached
         if (gateNavActive && !gateReached) {
             double distanceToTarget = Math.hypot(
                     follower.getPose().getX() - gateSetpoint.getX(),
@@ -351,7 +341,6 @@ public class RED_TELEOP extends OpMode {
             }
         }
 
-        // Check if park setpoint reached
         if (parkNavActive && !parkReached) {
             double distanceToPark = Math.hypot(
                     follower.getPose().getX() - parkSetpoint.getX(),
@@ -365,7 +354,6 @@ public class RED_TELEOP extends OpMode {
             }
         }
 
-        // Handle launch sequence when any setpoint reached
         boolean anySetpointReached = setpointReached || targetOneReached || targetTwoReached || gateReached;
         if (anySetpointReached) {
             switch (launchState) {
@@ -383,7 +371,6 @@ public class RED_TELEOP extends OpMode {
                     catapult2.setPower(CATAPULT_DOWN_POWER);
                     if (setpointLaunchTimer.seconds() >= LAUNCH_DOWN_DURATION) {
                         launchState = LaunchState.LAUNCHING_HOLD;
-                        // Reset all launch navigation states
                         setpointNavActive = false;
                         setpointReached = false;
                         targetOneNavActive = false;

@@ -376,7 +376,6 @@ public class BLUE_TELEOP extends OpMode {
             }
         }
 
-        // Handle launch sequence when any setpoint reached
         boolean anySetpointReached = setpointReached || targetOneReached || targetTwoReached || gateReached;
         if (anySetpointReached) {
             switch (launchState) {
