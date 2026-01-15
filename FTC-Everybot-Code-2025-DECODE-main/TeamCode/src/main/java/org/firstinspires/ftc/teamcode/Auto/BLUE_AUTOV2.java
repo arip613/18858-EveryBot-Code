@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.Tests;
+package org.firstinspires.ftc.teamcode.Auto;
 
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
@@ -11,11 +11,12 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
-import org.firstinspires.ftc.teamcode.Teleop.RED_TELEOP;
+import org.firstinspires.ftc.teamcode.Teleop.BLUE_TELEOPV2;
+import org.firstinspires.ftc.teamcode.Teleop.RED_TELEOPV2;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "12C", group = "Examples")
-public class RED_AUTO extends OpMode {
+@Autonomous(name = "AUTO_BLUE", group = "Auto")
+public class BLUE_AUTOV2 extends OpMode {
 
     private Follower follower;
     private Timer waitTimer;
@@ -42,21 +43,21 @@ public class RED_AUTO extends OpMode {
     private Timer gateWaitTimer;
 
     private int pathState;
-    private final Pose startPose = new Pose(111.232, 135.752, Math.toRadians(90));
-    private final Pose scorePose = new Pose(116.45412130637635, 126.97978227060653, Math.toRadians(37));
+    private final Pose startPose = new Pose(111.232, 135.752, Math.toRadians(90)).mirror();
+    private final Pose scorePose = new Pose(116.90202177293938, 123.84447900466563, Math.toRadians(37)).mirror();
 
-    private final Pose pickup1Pose = new Pose(95, 88, Math.toRadians(0));
-    private final Pose pickup1EndPose = new Pose(129, 88, Math.toRadians(0));
+    private final Pose pickup1Pose = new Pose(95, 88, Math.toRadians(0)).mirror();
+    private final Pose pickup1EndPose = new Pose(129, 88, Math.toRadians(0)).mirror();
 
-    private final Pose pickup2Pose = new Pose(95, 63, Math.toRadians(0));
-    private final Pose pickup2EndPose = new Pose(135, 63, Math.toRadians(0));
-    private final Pose pickup2AvoidPose = new Pose(95, 88, Math.toRadians(0));
+    private final Pose pickup2Pose = new Pose(95, 63, Math.toRadians(0)).mirror();
+    private final Pose pickup2EndPose = new Pose(135, 63, Math.toRadians(0)).mirror();
+    private final Pose pickup2AvoidPose = new Pose(95, 95, Math.toRadians(0)).mirror();
 
-    private final Pose pickup3Pose = new Pose(95, 41, Math.toRadians(0));
-    private final Pose pickup3EndPose = new Pose(135, 41, Math.toRadians(0));
+    private final Pose pickup3Pose = new Pose(95, 41, Math.toRadians(0)).mirror();
+    private final Pose pickup3EndPose = new Pose(135, 41, Math.toRadians(0)).mirror();
 
-    private final Pose gateStartPose = new Pose(118.03732503888025, 63, Math.toRadians(0));
-    private final Pose gateEndPose = new Pose(128.99533437013997, 69.87247278382581, Math.toRadians(0));
+    private final Pose gateStartPose = new Pose(114.03732503888025, 63, Math.toRadians(0)).mirror();
+    private final Pose gateEndPose = new Pose(128.99533437013997, 72, Math.toRadians(0)).mirror();
 
     private PathChain startToScore;
     private PathChain scoreToPickup2Avoid, pickup2AvoidToPickup2, pickup2ToPickup2End;
@@ -193,7 +194,7 @@ public class RED_AUTO extends OpMode {
 
             case 1:
                 // Launch
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 1) {
+                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 2) {
                     launch();
                     setPathState(2);
                 }
@@ -432,7 +433,10 @@ public class RED_AUTO extends OpMode {
     }
 
     @Override
-    public void init_loop() {}
+    public void init_loop() {
+        BLUE_TELEOPV2.startingPose = follower.getPose();
+    }
+
 
     @Override
     public void start() {
@@ -446,6 +450,6 @@ public class RED_AUTO extends OpMode {
         intake.setPower(0);
         catapult1.setPower(0);
         catapult2.setPower(0);
-        thug.startingPose = follower.getPose();
+        BLUE_TELEOPV2.startingPose = follower.getPose();
     }
 }

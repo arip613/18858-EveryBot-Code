@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.Tests;
+package org.firstinspires.ftc.teamcode.Teleop;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
@@ -15,14 +15,13 @@ import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
-
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 import java.util.function.Supplier;
 
 @Configurable
-@TeleOp(name = "RED TELEOP", group = "Teleop")
-public class thug extends OpMode {
+@TeleOp(name = "TELEOP_RED", group = "Teleop")
+public class RED_TELEOPV2 extends OpMode {
 
     private ElapsedTime runtime = new ElapsedTime();
     private ElapsedTime catatime = new ElapsedTime();
@@ -40,28 +39,27 @@ public class thug extends OpMode {
 
     private boolean setpointNavActive = false;
     private boolean setpointReached = false;
-    private Pose targetSetpoint = new Pose(118.537, 119.634, Math.toRadians(37));
+    private Pose targetSetpoint = new Pose(120.93312597200622, 128.77138413685847, Math.toRadians(37));
 
     private boolean targetOneNavActive = false;
     private boolean targetOneReached = false;
-    private Pose targetOneSetpoint = new Pose(97.6829268292683, 104.04878048780488, Math.toRadians(37));
+    private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37));
 
     private boolean targetTwoNavActive = false;
     private boolean targetTwoReached = false;
-    private Pose targetTwoSetpoint = new Pose(112.390, 114.585, Math.toRadians(37));
+    private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37));
 
     // Gate setpoint (B button)
     private boolean gateNavActive = false;
     private boolean gateReached = false;
-    private Pose gateSetpoint = new Pose(128.657, 69.041, Math.toRadians(90));
+    private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90));
 
     private static final double SETPOINT_TOLERANCE = 2; // inches
 
     // Park setpoint variables
     private boolean parkNavActive = false;
     private boolean parkReached = false;
-    private Pose parkSetpoint = new Pose(45.151, 40.329, Math.toRadians(180));
-    private Pose gateWaypoint = new Pose(120.73170731707316, 71.34146341463415, Math.toRadians(180));
+    private Pose gateWaypoint = new Pose(120.73170731707316, 72.5, Math.toRadians(90));
 
 
     private boolean parkFootActive = false;
@@ -86,9 +84,11 @@ public class thug extends OpMode {
     private double INTAKE_OUT_POWER = 1;
     private double INTAKE_OFF_POWER = 0.0;
     private double intakePower = INTAKE_OFF_POWER;
+    private boolean wasFootUpPressed = false;
+    private boolean wasFootDownPressed = false;
 
-    private double FOOT_UP_POSITION = 0.0;
-    private double FOOT_DOWN_POSITION = 0.5;
+    private double FOOT_UP_POSITION = 0.85;
+    private double FOOT_DOWN_POSITION = 0.525;
     private double footPosition = FOOT_UP_POSITION;
 
     private double CATAPULT_UP_POWER = -1.0;
@@ -132,6 +132,8 @@ public class thug extends OpMode {
 
         foot1.setPosition(FOOT_UP_POSITION);
         foot2.setPosition(FOOT_UP_POSITION);
+
+
 
         intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         catapult1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -339,23 +341,12 @@ public class thug extends OpMode {
 
             if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
                 gateReached = true;
-                launchState = LaunchState.LAUNCHING_UP;
+                launchState = LaunchState.IDLE;
                 setpointLaunchTimer.reset();
             }
         }
 
-        if (parkNavActive && !parkReached) {
-            double distanceToPark = Math.hypot(
-                    follower.getPose().getX() - parkSetpoint.getX(),
-                    follower.getPose().getY() - parkSetpoint.getY()
-            );
 
-            if (distanceToPark < SETPOINT_TOLERANCE && !follower.isBusy()) {
-                parkReached = true;
-                parkFootActive = true;
-                parkFootTimer.reset();
-            }
-        }
 
         boolean anySetpointReached = setpointReached || targetOneReached || targetTwoReached || gateReached;
         if (anySetpointReached) {
@@ -419,7 +410,6 @@ public class thug extends OpMode {
             slowMode = !slowMode;
         }
 
-        // Manual control (only when not in automated sequences and startup is complete)
         if (!anySetpointReached && !parkReached && !startupCatapultActive) {
             boolean intakeInButton = gamepad1.left_trigger > 0.2;
             boolean intakeOutButton = gamepad1.left_bumper;
@@ -451,13 +441,20 @@ public class thug extends OpMode {
                 intakePower = INTAKE_OFF_POWER;
             }
 
-            if (footUpButton) {
-                footmode = FootMode.UP;
-                footPosition = FOOT_UP_POSITION;
-            } else if (footDownButton) {
-                footmode = FootMode.DOWN;
-                footPosition = FOOT_DOWN_POSITION;
+
+
+            if (footUpButton && !wasFootUpPressed) {
+                foot1.setPosition(FOOT_UP_POSITION);
+                foot2.setPosition(FOOT_UP_POSITION);
+
+            } else if (footDownButton && !wasFootDownPressed) {
+                foot1.setPosition(FOOT_DOWN_POSITION);
+                foot2.setPosition(FOOT_DOWN_POSITION);
             }
+
+
+            wasFootUpPressed = footUpButton;
+            wasFootDownPressed = footDownButton;
 
             if (catapultUpButton) {
                 pivotMode = CatapultModes.UP;
@@ -474,14 +471,9 @@ public class thug extends OpMode {
             }
 
             intake.setPower(intakePower);
-            if (!parkFootActive) {
-                foot1.setPosition(footPosition);
-                foot2.setPosition(footPosition);
-            }
+
         } else if (anySetpointReached) {
-            // Allow intake and foot control during launch sequence
             boolean intakeInButton = gamepad1.left_trigger > 0.2;
-            boolean footOutButton = gamepad1.a;
 
             if (intakeInButton) {
                 intakePower = INTAKE_IN_POWER;
@@ -489,17 +481,9 @@ public class thug extends OpMode {
                 intakePower = INTAKE_OFF_POWER;
             }
 
-            if (footOutButton) {
-                footmode = FootMode.DOWN;
-                footPosition = FOOT_DOWN_POSITION;
-            } else {
-                footmode = FootMode.UP;
-                footPosition = FOOT_UP_POSITION;
-            }
 
             intake.setPower(intakePower);
-            foot1.setPosition(footPosition);
-            foot2.setPosition(footPosition);
+
         }
 
         String catapult_mode_str;
@@ -521,34 +505,9 @@ public class thug extends OpMode {
         if (targetTwoNavActive) activeTarget = "TARGET_TWO";
         if (gateNavActive) activeTarget = "GATE";
         if (parkNavActive) activeTarget = "PARK";
-
-        telemetry.addData("Status", "Run Time: " + runtime.toString());
-        telemetry.addData("Slow Mode", slowMode ? "ON" : "OFF");
-        telemetry.addData("Startup Catapult Active", startupCatapultActive);
-        telemetry.addData("Active Target", activeTarget);
-        telemetry.addData("Setpoint Reached", setpointReached);
-        telemetry.addData("Target One Reached", targetOneReached);
-        telemetry.addData("Target Two Reached", targetTwoReached);
-        telemetry.addData("Gate Reached", gateReached);
-        telemetry.addData("Park Reached", parkReached);
-        telemetry.addData("Launch State", launchState);
-        telemetry.addData("Automated Drive", automatedDrive);
-        telemetry.addData("Auto Down Active", autoDownActive);
-        telemetry.addData("Position", follower.getPose());
-        telemetry.addData("Velocity", follower.getVelocity());
-        telemetry.addData("Intake Power", "%.2f", intake.getPower());
         telemetry.addData("Foot1 Position", "%.3f", foot1.getPosition());
         telemetry.addData("Foot2 Position", "%.3f", foot2.getPosition());
-        telemetry.addData("Foot Mode", footmode);
-        telemetry.addData("Catapult1 Pos/Power", "%d, %.2f",
-                catapult1.getCurrentPosition(), catapult1.getPower());
-        telemetry.addData("Catapult2 Pos/Power", "%d, %.2f",
-                catapult2.getCurrentPosition(), catapult2.getPower());
-        telemetry.addData("Catapult Mode", catapult_mode_str);
-        telemetry.update();
 
-        telemetryM.debug("position", follower.getPose());
-        telemetryM.debug("velocity", follower.getVelocity());
-        telemetryM.debug("activeTarget", activeTarget);
+
     }
 }
