@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.Teleop;
+package org.firstinspires.ftc.teamcode.Tests;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
@@ -20,9 +20,8 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import java.util.function.Supplier;
 
 @Configurable
-@TeleOp(name = "TELEOP_BLUE", group = "Teleop")
-public class BLUE_TELEOPV2 extends OpMode {
-
+@TeleOp(name = "VSHOT", group = "Teleop")
+public class VELOCITY_SHOT_RED extends OpMode {
     private ElapsedTime runtime = new ElapsedTime();
     private ElapsedTime catatime = new ElapsedTime();
     private ElapsedTime autoDownTimer = new ElapsedTime();
@@ -33,40 +32,49 @@ public class BLUE_TELEOPV2 extends OpMode {
     private Follower follower;
     public static Pose startingPose;
     private boolean automatedDrive;
-    private Supplier<PathChain> pathChain;
+    private Supplier pathChain;
     private TelemetryManager telemetryM;
     private boolean slowMode = false;
 
     private boolean setpointNavActive = false;
     private boolean setpointReached = false;
-    private Pose targetSetpoint = new Pose(116.69051321928461, 132.29237947122863, Math.toRadians(37)).mirror();
+    private Pose targetSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(37));
+
+    private Pose VelocityShotSetpoint = new Pose(72, 72, Math.toRadians(37));
+    private Pose ScoreSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(37));
+
+    // Velocity shot variables
+    private boolean velocityShotNavActive = false;
+    private boolean velocityShotReached = false;
+    private boolean velocityShotScoreReached = false;
+    private static final double VELOCITY_SHOT_TOLERANCE = 24;
 
     private boolean targetOneNavActive = false;
     private boolean targetOneReached = false;
-    private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37)).mirror();
+    private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37));
 
     private boolean targetTwoNavActive = false;
     private boolean targetTwoReached = false;
-    private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37)).mirror();
+    private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37));
 
     // Gate setpoint (B button)
     private boolean gateNavActive = false;
     private boolean gateReached = false;
-    private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90)).mirror();
+    private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90));
 
     private static final double SETPOINT_TOLERANCE = 2; // inches
 
     // Park setpoint variables
     private boolean parkNavActive = false;
     private boolean parkReached = false;
-    private Pose gateWaypoint = new Pose(120.73170731707316, 72.5, Math.toRadians(90)).mirror();
-
+    private Pose gateWaypoint = new Pose(120.73170731707316, 72.5, Math.toRadians(90));
 
     private boolean parkFootActive = false;
     private static final double PARK_FOOT_DURATION = 2;
 
     private enum LaunchState {IDLE, LAUNCHING_UP, LAUNCHING_DOWN, LAUNCHING_HOLD}
     private LaunchState launchState = LaunchState.IDLE;
+
     private static final double LAUNCH_UP_DURATION = 0.1;
     private static final double LAUNCH_DOWN_DURATION = 0.4;
 
@@ -84,6 +92,7 @@ public class BLUE_TELEOPV2 extends OpMode {
     private double INTAKE_OUT_POWER = 1;
     private double INTAKE_OFF_POWER = 0.0;
     private double intakePower = INTAKE_OFF_POWER;
+
     private boolean wasFootUpPressed = false;
     private boolean wasFootDownPressed = false;
 
@@ -99,6 +108,8 @@ public class BLUE_TELEOPV2 extends OpMode {
     private boolean wasUpButtonPressed = false;
     private static final double AUTO_DOWN_DURATION = 0.15;
 
+    private PathChain VelocityShot;
+
     private enum CatapultModes {UP, DOWN, HOLD}
     private CatapultModes pivotMode;
 
@@ -109,15 +120,13 @@ public class BLUE_TELEOPV2 extends OpMode {
     public void init() {
         telemetry.addData("Status", "Initializing");
 
-
         follower = Constants.createFollower(hardwareMap);
         follower.setStartingPose(startingPose == null ? new Pose() : startingPose);
         follower.update();
+
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
 
-
         intake = hardwareMap.get(DcMotor.class, "intake");
-
         catapult1 = hardwareMap.get(DcMotor.class, "catapult1");
         catapult2 = hardwareMap.get(DcMotor.class, "catapult2");
         foot1 = hardwareMap.get(Servo.class, "foot1");
@@ -126,12 +135,11 @@ public class BLUE_TELEOPV2 extends OpMode {
         intake.setDirection(DcMotor.Direction.FORWARD);
         catapult1.setDirection(DcMotor.Direction.REVERSE);
         catapult2.setDirection(DcMotor.Direction.FORWARD);
-
         foot1.setDirection(Servo.Direction.FORWARD);
         foot2.setDirection(Servo.Direction.REVERSE);
+
         foot1.setPosition(FOOT_UP_POSITION);
         foot2.setPosition(FOOT_UP_POSITION);
-        
 
         intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         catapult1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
@@ -144,8 +152,6 @@ public class BLUE_TELEOPV2 extends OpMode {
     @Override
     public void start() {
         follower.startTeleopDrive();
-
-
         runtime.reset();
         catatime.reset();
         startupCatapultTimer.reset();
@@ -184,15 +190,33 @@ public class BLUE_TELEOPV2 extends OpMode {
                 Math.abs(gamepad1.left_stick_x) > 0.1 ||
                 Math.abs(gamepad1.right_stick_x) > 0.1;
 
-        boolean anyLaunchNavActive = setpointNavActive || targetOneNavActive || targetTwoNavActive || gateNavActive;
+        boolean anyLaunchNavActive = setpointNavActive || targetOneNavActive || targetTwoNavActive ||
+                gateNavActive || velocityShotNavActive;
+
+        // Right bumper - Velocity shot sequence
+        if (gamepad1.right_bumper && !anyLaunchNavActive && !parkNavActive) {
+            PathChain velocityShotPath = follower.pathBuilder()
+                    .addPath(new Path(new BezierLine(follower::getPose, VelocityShotSetpoint)))
+                    .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
+                            follower::getHeading, VelocityShotSetpoint.getHeading(), 0.8))
+                    .addPath(new Path(new BezierLine(VelocityShotSetpoint, ScoreSetpoint)))
+                    .setHeadingInterpolation(HeadingInterpolator.linear(
+                            VelocityShotSetpoint.getHeading(), ScoreSetpoint.getHeading()))
+                    .build();
+
+            follower.followPath(velocityShotPath);
+            velocityShotNavActive = true;
+            velocityShotReached = false;
+            velocityShotScoreReached = false;
+            launchState = LaunchState.IDLE;
+            automatedDrive = true;
+        }
 
         if (gamepad1.y && !anyLaunchNavActive && !parkNavActive) {
             PathChain setpointPath = follower.pathBuilder()
                     .addPath(new Path(new BezierLine(follower::getPose, targetSetpoint)))
                     .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
-                            follower::getHeading,
-                            targetSetpoint.getHeading(),
-                            0.8))
+                            follower::getHeading, targetSetpoint.getHeading(), 0.8))
                     .build();
 
             follower.followPath(setpointPath);
@@ -206,9 +230,7 @@ public class BLUE_TELEOPV2 extends OpMode {
             PathChain targetOnePath = follower.pathBuilder()
                     .addPath(new Path(new BezierLine(follower::getPose, targetOneSetpoint)))
                     .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
-                            follower::getHeading,
-                            targetOneSetpoint.getHeading(),
-                            0.8))
+                            follower::getHeading, targetOneSetpoint.getHeading(), 0.8))
                     .build();
 
             follower.followPath(targetOnePath);
@@ -222,9 +244,7 @@ public class BLUE_TELEOPV2 extends OpMode {
             PathChain targetTwoPath = follower.pathBuilder()
                     .addPath(new Path(new BezierLine(follower::getPose, targetTwoSetpoint)))
                     .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
-                            follower::getHeading,
-                            targetTwoSetpoint.getHeading(),
-                            0.8))
+                            follower::getHeading, targetTwoSetpoint.getHeading(), 0.8))
                     .build();
 
             follower.followPath(targetTwoPath);
@@ -234,10 +254,10 @@ public class BLUE_TELEOPV2 extends OpMode {
             automatedDrive = true;
         }
 
-
         if (gamepad1.b && !anyLaunchNavActive && !parkNavActive) {
             PathChain gatePath = follower.pathBuilder()
-                    .addPath(new Path(new BezierLine(new Pose(follower.getPose().getX(), follower.getPose().getY(), follower.getHeading()), gateWaypoint)))
+                    .addPath(new Path(new BezierLine(new Pose(follower.getPose().getX(),
+                            follower.getPose().getY(), follower.getHeading()), gateWaypoint)))
                     .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
                             follower::getHeading, gateWaypoint.getHeading(), 0.8))
                     .addPath(new Path(new BezierLine(gateWaypoint, gateSetpoint)))
@@ -250,6 +270,15 @@ public class BLUE_TELEOPV2 extends OpMode {
             gateReached = false;
             launchState = LaunchState.IDLE;
             automatedDrive = true;
+        }
+
+        if (velocityShotNavActive && driverInput) {
+            follower.startTeleopDrive();
+            velocityShotNavActive = false;
+            velocityShotReached = false;
+            velocityShotScoreReached = false;
+            launchState = LaunchState.IDLE;
+            automatedDrive = false;
         }
 
         if (setpointNavActive && driverInput) {
@@ -290,6 +319,31 @@ public class BLUE_TELEOPV2 extends OpMode {
             parkReached = false;
             parkFootActive = false;
             automatedDrive = false;
+        }
+
+        // Velocity shot sequence logic
+        if (velocityShotNavActive && !velocityShotReached) {
+            double distanceToVelocityPoint = Math.hypot(
+                    follower.getPose().getX() - VelocityShotSetpoint.getX(),
+                    follower.getPose().getY() - VelocityShotSetpoint.getY()
+            );
+
+            if (distanceToVelocityPoint < SETPOINT_TOLERANCE) {
+                velocityShotReached = true;
+            }
+        }
+
+        if (velocityShotNavActive && velocityShotReached && !velocityShotScoreReached) {
+            double distanceToScore = Math.hypot(
+                    follower.getPose().getX() - ScoreSetpoint.getX(),
+                    follower.getPose().getY() - ScoreSetpoint.getY()
+            );
+
+            if (distanceToScore < VELOCITY_SHOT_TOLERANCE) {
+                velocityShotScoreReached = true;
+                launchState = LaunchState.LAUNCHING_UP;
+                setpointLaunchTimer.reset();
+            }
         }
 
         if (setpointNavActive && !setpointReached) {
@@ -344,9 +398,9 @@ public class BLUE_TELEOPV2 extends OpMode {
             }
         }
 
+        boolean anySetpointReached = setpointReached || targetOneReached || targetTwoReached ||
+                gateReached || velocityShotScoreReached;
 
-
-        boolean anySetpointReached = setpointReached || targetOneReached || targetTwoReached || gateReached;
         if (anySetpointReached) {
             switch (launchState) {
                 case LAUNCHING_UP:
@@ -371,6 +425,9 @@ public class BLUE_TELEOPV2 extends OpMode {
                         targetTwoReached = false;
                         gateNavActive = false;
                         gateReached = false;
+                        velocityShotNavActive = false;
+                        velocityShotReached = false;
+                        velocityShotScoreReached = false;
                         automatedDrive = false;
                         follower.startTeleopDrive();
                     }
@@ -386,13 +443,11 @@ public class BLUE_TELEOPV2 extends OpMode {
             }
         }
 
-
         // Manual drive control
         if (!automatedDrive && !anyLaunchNavActive && !parkNavActive) {
-
             follower.setTeleOpDrive(
-                    gamepad1.left_stick_y,
-                    gamepad1.left_stick_x,
+                    -gamepad1.left_stick_y,
+                    -gamepad1.left_stick_x,
                     -gamepad1.right_stick_x,
                     false // false = field centric
             );
@@ -408,29 +463,12 @@ public class BLUE_TELEOPV2 extends OpMode {
             slowMode = !slowMode;
         }
 
-        // Manual control (only when not in automated sequences and startup is complete)
         if (!anySetpointReached && !parkReached && !startupCatapultActive) {
             boolean intakeInButton = gamepad1.left_trigger > 0.2;
             boolean intakeOutButton = gamepad1.left_bumper;
-            boolean catapultUpButton = gamepad1.right_bumper;
             boolean catapultDownButton = gamepad1.right_trigger > 0.2;
             boolean footUpButton = gamepad1.dpad_up;
             boolean footDownButton = gamepad1.dpad_down;
-
-            if (wasUpButtonPressed && !catapultUpButton && !autoDownActive) {
-                autoDownActive = true;
-                autoDownTimer.reset();
-            }
-
-            wasUpButtonPressed = catapultUpButton;
-
-            if (autoDownActive && autoDownTimer.seconds() >= AUTO_DOWN_DURATION) {
-                autoDownActive = false;
-            }
-
-            if (catapultUpButton && catapultDownButton) {
-                catapultUpButton = false;
-            }
 
             if (intakeInButton) {
                 intakePower = INTAKE_IN_POWER;
@@ -440,26 +478,18 @@ public class BLUE_TELEOPV2 extends OpMode {
                 intakePower = INTAKE_OFF_POWER;
             }
 
-
-
             if (footUpButton && !wasFootUpPressed) {
                 foot1.setPosition(FOOT_UP_POSITION);
                 foot2.setPosition(FOOT_UP_POSITION);
-
             } else if (footDownButton && !wasFootDownPressed) {
                 foot1.setPosition(FOOT_DOWN_POSITION);
                 foot2.setPosition(FOOT_DOWN_POSITION);
             }
 
-
             wasFootUpPressed = footUpButton;
             wasFootDownPressed = footDownButton;
 
-            if (catapultUpButton) {
-                pivotMode = CatapultModes.UP;
-                catapult1.setPower(CATAPULT_UP_POWER);
-                catapult2.setPower(CATAPULT_UP_POWER);
-            } else if (catapultDownButton || autoDownActive) {
+            if (catapultDownButton || autoDownActive) {
                 pivotMode = CatapultModes.DOWN;
                 catapult1.setPower(CATAPULT_DOWN_POWER);
                 catapult2.setPower(CATAPULT_DOWN_POWER);
@@ -470,9 +500,7 @@ public class BLUE_TELEOPV2 extends OpMode {
             }
 
             intake.setPower(intakePower);
-
         } else if (anySetpointReached) {
-            // Allow intake and foot control during launch sequence
             boolean intakeInButton = gamepad1.left_trigger > 0.2;
 
             if (intakeInButton) {
@@ -481,9 +509,7 @@ public class BLUE_TELEOPV2 extends OpMode {
                 intakePower = INTAKE_OFF_POWER;
             }
 
-
             intake.setPower(intakePower);
-
         }
 
         String catapult_mode_str;
@@ -505,9 +531,12 @@ public class BLUE_TELEOPV2 extends OpMode {
         if (targetTwoNavActive) activeTarget = "TARGET_TWO";
         if (gateNavActive) activeTarget = "GATE";
         if (parkNavActive) activeTarget = "PARK";
+        if (velocityShotNavActive) activeTarget = "VELOCITY_SHOT";
+
+        telemetry.addData("Active Target", activeTarget);
+        telemetry.addData("Catapult Mode", catapult_mode_str);
         telemetry.addData("Foot1 Position", "%.3f", foot1.getPosition());
         telemetry.addData("Foot2 Position", "%.3f", foot2.getPosition());
-
-
+        telemetry.update();
     }
 }

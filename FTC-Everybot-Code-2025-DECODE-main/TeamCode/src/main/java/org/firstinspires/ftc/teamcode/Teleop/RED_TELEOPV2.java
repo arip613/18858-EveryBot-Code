@@ -39,7 +39,8 @@ public class RED_TELEOPV2 extends OpMode {
 
     private boolean setpointNavActive = false;
     private boolean setpointReached = false;
-    private Pose targetSetpoint = new Pose(120.93312597200622, 128.77138413685847, Math.toRadians(37));
+    private Pose targetSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(25));
+
 
     private boolean targetOneNavActive = false;
     private boolean targetOneReached = false;
