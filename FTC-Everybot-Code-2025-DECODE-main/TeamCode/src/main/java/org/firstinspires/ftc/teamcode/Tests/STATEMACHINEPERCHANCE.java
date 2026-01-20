@@ -17,8 +17,6 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-import java.util.function.Supplier;
-
 @Configurable
 @TeleOp(name = "VSHOT_SM", group = "Teleop")
 public class STATEMACHINEPERCHANCE extends OpMode {
