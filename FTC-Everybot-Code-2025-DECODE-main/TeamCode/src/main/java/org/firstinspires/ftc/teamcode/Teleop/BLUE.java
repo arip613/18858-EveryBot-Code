@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.Tests;
+package org.firstinspires.ftc.teamcode.Teleop;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
@@ -18,8 +18,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Configurable
-@TeleOp(name = "VSHOT_SM", group = "Teleop")
-public class STATEMACHINEPERCHANCE extends OpMode {
+@TeleOp(name = "BLUE NOAH USE THIS", group = "Teleop")
+public class BLUE extends OpMode {
 
     // ==================== STATE MACHINE ENUMS ====================
     private enum RobotState {
@@ -61,12 +61,12 @@ public class STATEMACHINEPERCHANCE extends OpMode {
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
     private Pose VelocityShotSetpoint = new Pose(72, 72, Math.toRadians(37));
-    private Pose ScoreSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(42));
-    private Pose targetSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(42));
-    private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37));
-    private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37));
-    private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90));
-    private Pose gateWaypoint = new Pose(120.73170731707316, 72.5, Math.toRadians(90));
+    private Pose ScoreSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(42)).mirror();
+    private Pose targetSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(42)).mirror();
+    private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37)).mirror();
+    private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37)).mirror();
+    private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90)).mirror();
+    private Pose gateWaypoint = new Pose(120.73170731707316, 72.5, Math.toRadians(90)).mirror();
 
     // ==================== CONSTANTS ====================
     private static final double SETPOINT_TOLERANCE = 2.0;

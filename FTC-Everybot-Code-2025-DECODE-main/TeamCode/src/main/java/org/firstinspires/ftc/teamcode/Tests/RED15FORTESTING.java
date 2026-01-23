@@ -12,8 +12,6 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
-import org.firstinspires.ftc.teamcode.Teleop.BLUE_TELEOPV2;
-import org.firstinspires.ftc.teamcode.Teleop.RED_TELEOPV2;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Autonomous(name = "RED15test1", group = "Auto")

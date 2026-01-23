@@ -3,8 +3,8 @@ package org.firstinspires.ftc.teamcode.Auto;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
-import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.BezierCurve;
+import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.PathChain;
 import com.pedropathing.util.Timer;
@@ -12,12 +12,12 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
-import org.firstinspires.ftc.teamcode.Teleop.BLUE_TELEOPV2;
-import org.firstinspires.ftc.teamcode.Teleop.RED_TELEOPV2;
+import org.firstinspires.ftc.teamcode.Tests.STATEMACHINEPERCHANCE;
+import org.firstinspires.ftc.teamcode.Tests.VELOCITY_SHOT_RED;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "RED15", group = "Auto")
-public class RED15 extends OpMode {
+@Autonomous(name = "Awooga", group = "Auto")
+public class RED12 extends OpMode {
 
     private Follower follower;
     private Timer waitTimer;
@@ -45,8 +45,8 @@ public class RED15 extends OpMode {
 
     private int pathState;
     private final Pose startPose = new Pose(116.69051321928461, 132.29237947122863, Math.toRadians(37));
-    private final Pose scorePose = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(28));
-    private final Pose endPose = new Pose(110.6750092686662,126.45208942216487,Math.toRadians(43));
+    private final Pose scorePose = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(40));
+    private final Pose endPose = new Pose(115,68.5,Math.toRadians(0));
 
     private final Pose pickup1Pose = new Pose(89, 88.5, Math.toRadians(0));
     private final Pose pickup1EndPose = new Pose(123.193, 88.5, Math.toRadians(0));
@@ -60,8 +60,8 @@ public class RED15 extends OpMode {
     private final Pose pickup3Pose = new Pose(91, 43, Math.toRadians(0));
     private final Pose pickup3EndPose = new Pose(126, 43, Math.toRadians(0));
 
-    private final Pose gateStartPose = new Pose(98, 63, Math.toRadians(0));
-    private final Pose gateEndPose = new Pose(118, 68, Math.toRadians(0)); //19.5, 68, 0
+    private final Pose gateStartPose = new Pose(98, 67, Math.toRadians(0));
+    private final Pose gateEndPose = new Pose(120.5, 69, Math.toRadians(0)); //19.5, 68, 0
     private final Pose gateAndIntakePose = new Pose(130.98911353032653, 61.44323483670298, Math.toRadians(15.67));
     private PathChain startToScore;
     private PathChain scoreToPickup2;
@@ -241,98 +241,74 @@ public class RED15 extends OpMode {
 
             case 8:
                 if(isCatapultReady()) {
-                    follower.followPath(scoreToGateAndIntake, true);
-                    intake.setPower(INTAKE_IN_POWER);
-                    waitTimer.resetTimer();
+                    follower.followPath(scoreToPickup1, true);
                     setPathState(9);
                 }
                 break;
 
             case 9:
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 4.5) {
-                    follower.followPath(gateAndIntakeToScore, true);
+                if(!follower.isBusy()) {
+                    intake.setPower(INTAKE_IN_POWER);
+                    follower.followPath(pickup1ToPickup1End, true);
                     setPathState(10);
-                    waitTimer.resetTimer();
                 }
                 break;
 
             case 10:
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.2) {
-                    launch();
+                if(!follower.isBusy()) {
+                    follower.followPath(pickup1EndToScore, true);
                     setPathState(11);
+                    waitTimer.resetTimer();
                 }
                 break;
 
             case 11:
-                if(isCatapultReady()) {
-                    follower.followPath(scoreToPickup1, true);
+                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.5) {
+                    launch();
                     setPathState(12);
                 }
                 break;
 
             case 12:
-                if(!follower.isBusy()) {
-                    intake.setPower(INTAKE_IN_POWER);
-                    follower.followPath(pickup1ToPickup1End, true);
+                if(isCatapultReady()) {
+                    follower.followPath(scoreToPickup3, true);
                     setPathState(13);
                 }
                 break;
 
             case 13:
                 if(!follower.isBusy()) {
-                    follower.followPath(pickup1EndToScore, true);
+                    follower.followPath(pickup3ToPickup3End, true);
                     setPathState(14);
-                    waitTimer.resetTimer();
                 }
                 break;
 
             case 14:
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.5) {
-                    launch();
+                if(!follower.isBusy()) {
+                    follower.followPath(pickup3ToScore, true);
                     setPathState(15);
+                    waitTimer.resetTimer();
                 }
                 break;
-
             case 15:
-                if(isCatapultReady()) {
-                    follower.followPath(scoreToPickup3, true);
+                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.2) {
+                    launch();
                     setPathState(16);
                 }
                 break;
 
             case 16:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup3ToPickup3End, true);
-                    setPathState(17);
-                }
-                break;
-
-            case 17:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup3ToScore, true);
-                    setPathState(18);
-                    waitTimer.resetTimer();
-                }
-                break;
-            case 18:
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.2) {
-                    launch();
-                    setPathState(19);
-                }
-                break;
-
-            case 19:
                 if(isCatapultReady()) {
                     follower.followPath(follower.pathBuilder()
                             .addPath(new BezierLine(scorePose, endPose))
                             .setLinearHeadingInterpolation(scorePose.getHeading(), endPose.getHeading())
                             .build(), true);
-                    setPathState(20);
+                    setPathState(17);
                 }
                 break;
 
 
-            case 20:
+            case 17:
                 if(!follower.isBusy()) {
                     intake.setPower(INTAKE_OFF_POWER);
                     setPathState(-1);
@@ -405,7 +381,8 @@ public class RED15 extends OpMode {
 
     @Override
     public void init_loop() {
-        BLUE_TELEOPV2.startingPose = follower.getPose();
+        STATEMACHINEPERCHANCE.startingPose = follower.getPose();
+        VELOCITY_SHOT_RED.startingPose = follower.getPose();
     }
 
 
@@ -421,6 +398,11 @@ public class RED15 extends OpMode {
         intake.setPower(0);
         catapult1.setPower(0);
         catapult2.setPower(0);
-        RED_TELEOPV2.startingPose = follower.getPose();
+        VELOCITY_SHOT_RED.startingPose = follower.getPose();
+        STATEMACHINEPERCHANCE.startingPose = follower.getPose();
+
+
+
+
     }
 }

@@ -38,16 +38,16 @@ public class VELOCITY_SHOT_RED extends OpMode {
 
     private boolean setpointNavActive = false;
     private boolean setpointReached = false;
-    private Pose targetSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(37));
+    private Pose targetSetpoint = new Pose(116.70611346773308, 127.15504432107623, Math.toRadians(37));
 
-    private Pose VelocityShotSetpoint = new Pose(72, 72, Math.toRadians(37));
+    private Pose VelocityShotSetpoint = new Pose(72, 92, Math.toRadians(37));
     private Pose ScoreSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(37));
 
     // Velocity shot variables
     private boolean velocityShotNavActive = false;
     private boolean velocityShotReached = false;
     private boolean velocityShotScoreReached = false;
-    private static final double VELOCITY_SHOT_TOLERANCE = 24;
+    private static final double VELOCITY_SHOT_TOLERANCE = 36;
 
     private boolean targetOneNavActive = false;
     private boolean targetOneReached = false;

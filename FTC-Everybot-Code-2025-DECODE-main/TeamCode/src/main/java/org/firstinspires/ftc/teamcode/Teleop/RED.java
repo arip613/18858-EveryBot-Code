@@ -1,4 +1,4 @@
-package org.firstinspires.ftc.teamcode.Tests;
+package org.firstinspires.ftc.teamcode.Teleop;
 
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
@@ -18,8 +18,8 @@ import com.qualcomm.robotcore.util.ElapsedTime;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Configurable
-@TeleOp(name = "VSHOT_SM", group = "Teleop")
-public class STATEMACHINEPERCHANCE extends OpMode {
+@TeleOp(name = "RED NOAH USE THIS", group = "Teleop")
+public class RED extends OpMode {
 
     // ==================== STATE MACHINE ENUMS ====================
     private enum RobotState {
