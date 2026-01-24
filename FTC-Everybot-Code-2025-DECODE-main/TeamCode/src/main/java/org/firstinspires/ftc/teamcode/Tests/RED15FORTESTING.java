@@ -12,6 +12,7 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
+import org.firstinspires.ftc.teamcode.Teleop.RED;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Autonomous(name = "RED15test1", group = "Auto")
@@ -403,7 +404,7 @@ public class RED15FORTESTING extends OpMode {
 
     @Override
     public void init_loop() {
-        STATEMACHINEPERCHANCE.startingPose = follower.getPose();
+        RED.startingPose = follower.getPose();
     }
 
 
@@ -419,8 +420,8 @@ public class RED15FORTESTING extends OpMode {
         intake.setPower(0);
         catapult1.setPower(0);
         catapult2.setPower(0);
-        VELOCITY_SHOT_RED.startingPose = follower.getPose();
-        STATEMACHINEPERCHANCE.startingPose = follower.getPose();
+        RED.startingPose = follower.getPose();
+        RED.startingPose = follower.getPose();
 
     }
 }

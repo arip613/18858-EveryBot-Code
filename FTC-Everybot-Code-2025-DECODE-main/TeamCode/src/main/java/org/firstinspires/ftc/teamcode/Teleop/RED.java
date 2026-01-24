@@ -14,11 +14,15 @@ import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
+import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
+import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
+import org.firstinspires.ftc.teamcode.Prism.Color;
+import static org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Configurable
-@TeleOp(name = "RED NOAH USE THIS", group = "Teleop")
+@TeleOp(name = "LM5RED", group = "Teleop")
 public class RED extends OpMode {
 
     // ==================== STATE MACHINE ENUMS ====================
@@ -40,6 +44,17 @@ public class RED extends OpMode {
     private enum CatapultModes {UP, DOWN, HOLD}
     private enum FootMode {UP, DOWN}
 
+    private enum LedMode {
+        SWIRL,
+        INTAKE_REVERSE,
+        INTAKE,
+        SOLID_BLUE,
+        SOLID_WHITE,
+        BLINK
+    }
+
+    private LedMode currentLedMode = null;
+
     // ==================== STATE VARIABLES ====================
     private RobotState currentState = RobotState.STARTUP;
     private RobotState previousState = RobotState.STARTUP;
@@ -60,7 +75,7 @@ public class RED extends OpMode {
 
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
-    private Pose VelocityShotSetpoint = new Pose(72, 72, Math.toRadians(37));
+    private Pose VelocityShotSetpoint = new Pose(72, 82, Math.toRadians(37));
     private Pose ScoreSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(42));
     private Pose targetSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(42));
     private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37));
@@ -86,11 +101,25 @@ public class RED extends OpMode {
     private double CATAPULT_HOLD_POWER = 0.0;
 
     // ==================== CONTROL VARIABLES ====================
-    private boolean slowMode = false;
     private boolean wasFootUpPressed = false;
     private boolean wasFootDownPressed = false;
     private CatapultModes pivotMode;
     private FootMode footmode;
+
+    // ==================== LED VARIABLES ====================
+    private GoBildaPrismDriver prism = null;
+    private PrismAnimations.Solid solidRed = new PrismAnimations.Solid(Color.RED);
+    private PrismAnimations.Solid solidBlue = new PrismAnimations.Solid(Color.BLUE);
+    private PrismAnimations.Solid solidWhite = new PrismAnimations.Solid(Color.WHITE);
+    private PrismAnimations.Solid solidCyan = new PrismAnimations.Solid(Color.CYAN);
+    private PrismAnimations.Blink blinkBlueWhite = new PrismAnimations.Blink(Color.BLUE, Color.WHITE);
+    private PrismAnimations.Snakes swirlAnimation = new PrismAnimations.Snakes(Color.BLUE, Color.CYAN, Color.WHITE);
+
+    private boolean isIntakeRunning = false;
+    private boolean isIntakeReversing = false;
+    private boolean wasIntakeInPressed = false;
+    private boolean wasIntakeOutPressed = false;
+    private boolean feetButton = false;
 
     @Override
     public void init() {
@@ -121,6 +150,27 @@ public class RED extends OpMode {
         catapult1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         catapult2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
+        prism = hardwareMap.get(GoBildaPrismDriver.class, "prism");
+
+        // Configure solid color animations
+        solidRed.setBrightness(100);
+        solidBlue.setBrightness(100);
+        solidWhite.setBrightness(100);
+        solidCyan.setBrightness(100);
+
+        // Configure blink animation
+        blinkBlueWhite.setBrightness(100);
+        blinkBlueWhite.setPeriod(300);
+        blinkBlueWhite.setPrimaryColorPeriod(150);
+
+        // Configure swirl animation
+        swirlAnimation.setSpeed(0.6f);
+        swirlAnimation.setSnakeLength(8);
+        swirlAnimation.setSpacingBetween(3);
+        swirlAnimation.setRepeatAfter(20);
+        swirlAnimation.setBackgroundColor(Color.TRANSPARENT);
+        swirlAnimation.setBrightness(100);
+
         telemetry.addData("Status", "Initialized");
         telemetry.update();
     }
@@ -138,10 +188,8 @@ public class RED extends OpMode {
         follower.update();
         telemetryM.update();
 
-        // Handle input that applies to all states
         handleGlobalInput();
 
-        // Execute current state
         switch (currentState) {
             case STARTUP:
                 handleStartup();
@@ -181,8 +229,68 @@ public class RED extends OpMode {
         updateTelemetry();
     }
 
-    // ==================== STATE HANDLERS ====================
+    // ==================== LED UPDATE ====================
+    private void setLedMode(LedMode newMode) {
+        if (newMode == currentLedMode) return; // <-- THIS stops flicker
 
+        currentLedMode = newMode;
+
+        switch (newMode) {
+            case SWIRL:
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, swirlAnimation);
+                break;
+            case INTAKE_REVERSE:
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, solidRed);
+                break;
+            case INTAKE:
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, solidCyan);
+                break;
+            case SOLID_BLUE:
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, solidBlue);
+                break;
+            case SOLID_WHITE:
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, solidWhite);
+                break;
+            case BLINK:
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, blinkBlueWhite);
+                break;
+        }
+    }
+    private void updateLEDsForState() {
+        if (feetButton) {
+            setLedMode(LedMode.SWIRL);
+            return;
+        }
+
+        if (isIntakeReversing) {
+            setLedMode(LedMode.INTAKE_REVERSE);
+            return;
+        }
+
+        if (isIntakeRunning) {
+            setLedMode(LedMode.INTAKE);
+            return;
+        }
+
+        switch (currentState) {
+            case STARTUP:
+                setLedMode(LedMode.SOLID_WHITE);
+                break;
+
+            case MANUAL_DRIVE:
+            case LAUNCHING_UP:
+            case LAUNCHING_DOWN:
+            case LAUNCHING_HOLD:
+                setLedMode(LedMode.SOLID_BLUE);
+                break;
+
+            default:
+                setLedMode(LedMode.BLINK);
+                break;
+        }
+    }
+
+    // ==================== STATE HANDLERS ====================
     private void handleStartup() {
         if (stateTimer.seconds() < STARTUP_DOWN_DURATION) {
             catapult1.setPower(CATAPULT_DOWN_POWER);
@@ -197,7 +305,11 @@ public class RED extends OpMode {
     }
 
     private void handleManualDrive() {
-        // Check for navigation requests
+        if (gamepad1.right_trigger > 0.2) {
+            changeState(RobotState.LAUNCHING_UP);
+            return;
+        }
+
         if (gamepad1.right_bumper) {
             startVelocityShotSequence();
             return;
@@ -219,7 +331,6 @@ public class RED extends OpMode {
             return;
         }
 
-        // Manual drive control
         follower.setTeleOpDrive(
                 -gamepad1.left_stick_y,
                 -gamepad1.left_stick_x,
@@ -227,7 +338,6 @@ public class RED extends OpMode {
                 false
         );
 
-        // Handle manual controls
         handleManualControls();
     }
 
@@ -313,7 +423,6 @@ public class RED extends OpMode {
         catapult1.setPower(CATAPULT_UP_POWER);
         catapult2.setPower(CATAPULT_UP_POWER);
 
-        // Allow intake during launch
         handleIntakeDuringLaunch();
 
         if (stateTimer.seconds() >= LAUNCH_UP_DURATION) {
@@ -325,7 +434,6 @@ public class RED extends OpMode {
         catapult1.setPower(CATAPULT_DOWN_POWER);
         catapult2.setPower(CATAPULT_DOWN_POWER);
 
-        // Allow intake during launch
         handleIntakeDuringLaunch();
 
         if (stateTimer.seconds() >= LAUNCH_DOWN_DURATION) {
@@ -341,29 +449,22 @@ public class RED extends OpMode {
     }
 
     // ==================== HELPER METHODS ====================
-
     private void changeState(RobotState newState) {
         previousState = currentState;
         currentState = newState;
+        updateLEDsForState();
         stateTimer.reset();
     }
 
     private void handleGlobalInput() {
-        // Reset heading with back button
         if (gamepad1.back) {
             Pose currentPose = follower.getPose();
             follower.setPose(new Pose(currentPose.getX(), currentPose.getY(), 180));
         }
 
-        // Reset heading with start button
         if (gamepad1.start) {
             Pose currentPose = follower.getPose();
             follower.setPose(new Pose(currentPose.getX(), currentPose.getY(), 0));
-        }
-
-        // Toggle slow mode
-        if (gamepad1.left_bumper) {
-            slowMode = !slowMode;
         }
     }
 
@@ -380,21 +481,59 @@ public class RED extends OpMode {
         return false;
     }
 
+    private void handleIntakeInJustPressed() {
+        isIntakeRunning = true;
+        isIntakeReversing = false;
+        updateLEDsForState();
+    }
+
+    private void handleIntakeOutJustPressed() {
+        isIntakeRunning = false;
+        isIntakeReversing = true;
+        updateLEDsForState();
+    }
+    private static final double FOOT_EPSILON = 0.02;
+
+    private boolean isFootAllTheWayOut() {
+        return Math.abs(foot1.getPosition() - FOOT_DOWN_POSITION) < FOOT_EPSILON
+                && Math.abs(foot2.getPosition() - FOOT_DOWN_POSITION) < FOOT_EPSILON;
+    }
+
     private void handleManualControls() {
         boolean intakeInButton = gamepad1.left_trigger > 0.2;
         boolean intakeOutButton = gamepad1.left_bumper;
-        boolean catapultDownButton = gamepad1.right_trigger > 0.2;
         boolean footUpButton = gamepad1.dpad_up;
         boolean footDownButton = gamepad1.dpad_down;
+
+        // Update feet button status and LEDs
+        if (footUpButton || footDownButton||isFootAllTheWayOut()) {
+            feetButton = true;
+        } else {
+            feetButton = false;
+        }
 
         // Intake control
         if (intakeInButton) {
             intake.setPower(INTAKE_IN_POWER);
+            if (!wasIntakeInPressed) {
+                handleIntakeInJustPressed();
+            }
         } else if (intakeOutButton) {
             intake.setPower(INTAKE_OUT_POWER);
+            if (!wasIntakeOutPressed) {
+                handleIntakeOutJustPressed();
+            }
         } else {
             intake.setPower(INTAKE_OFF_POWER);
+            if (isIntakeRunning || isIntakeReversing) {
+                isIntakeRunning = false;
+                isIntakeReversing = false;
+                updateLEDsForState();
+            }
         }
+
+        wasIntakeInPressed = intakeInButton;
+        wasIntakeOutPressed = intakeOutButton;
 
         // Foot control
         if (footUpButton && !wasFootUpPressed) {
@@ -408,16 +547,13 @@ public class RED extends OpMode {
         wasFootUpPressed = footUpButton;
         wasFootDownPressed = footDownButton;
 
-        // Catapult control
-        if (catapultDownButton) {
-            pivotMode = CatapultModes.DOWN;
-            catapult1.setPower(CATAPULT_DOWN_POWER);
-            catapult2.setPower(CATAPULT_DOWN_POWER);
-        } else {
-            pivotMode = CatapultModes.HOLD;
-            catapult1.setPower(CATAPULT_HOLD_POWER);
-            catapult2.setPower(CATAPULT_HOLD_POWER);
-        }
+        // Update LEDs based on feet button
+        updateLEDsForState();
+
+        // Catapult hold when not launching
+        pivotMode = CatapultModes.HOLD;
+        catapult1.setPower(CATAPULT_HOLD_POWER);
+        catapult2.setPower(CATAPULT_HOLD_POWER);
     }
 
     private void handleIntakeDuringLaunch() {

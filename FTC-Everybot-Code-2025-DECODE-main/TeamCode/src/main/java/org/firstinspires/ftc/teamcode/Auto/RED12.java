@@ -12,11 +12,13 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
-import org.firstinspires.ftc.teamcode.Tests.STATEMACHINEPERCHANCE;
-import org.firstinspires.ftc.teamcode.Tests.VELOCITY_SHOT_RED;
+import org.firstinspires.ftc.teamcode.Prism.Color;
+import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
+import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
+import org.firstinspires.ftc.teamcode.Teleop.RED;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Awooga", group = "Auto")
+@Autonomous(name = "LM5RED", group = "Auto")
 public class RED12 extends OpMode {
 
     private Follower follower;
@@ -35,6 +37,7 @@ public class RED12 extends OpMode {
     private double CATAPULT_UP_POWER = -1.0;
     private double CATAPULT_DOWN_POWER = 1.0;
     private double CATAPULT_HOLD_POWER = 0.15;
+
 
     private enum CatapultModes {UP, DOWN, HOLD}
     private CatapultModes catapultMode = CatapultModes.HOLD;
@@ -57,7 +60,7 @@ public class RED12 extends OpMode {
     private final Pose pickup2EndPose = new Pose(126, 62, Math.toRadians(0));
     private final Pose pickup2AvoidPose = new Pose(72, 84, Math.toRadians(0));
 
-    private final Pose pickup3Pose = new Pose(91, 43, Math.toRadians(0));
+    private final Pose pickup3Pose = new Pose(89, 43, Math.toRadians(0));
     private final Pose pickup3EndPose = new Pose(126, 43, Math.toRadians(0));
 
     private final Pose gateStartPose = new Pose(98, 67, Math.toRadians(0));
@@ -72,6 +75,11 @@ public class RED12 extends OpMode {
     private PathChain gateAndIntakeToScore;
     private PathChain scoreToPickup1, pickup1ToPickup1End, pickup1EndToScore;
     private PathChain scoreToPickup3, pickup3ToPickup3End, pickup3ToScore, scoreToEndPose;
+    private PrismAnimations.Solid solidBlue = new PrismAnimations.Solid(Color.BLUE);
+
+    private GoBildaPrismDriver prism = null;
+
+
 
     public void buildPaths() {
         startToScore = follower.pathBuilder()
@@ -204,7 +212,7 @@ public class RED12 extends OpMode {
 
             case 3:
                 if(!follower.isBusy()) {
-                    follower.followPath(pickup2ToPickup2End, true);
+                    follower.followPath(pickup2ToPickup2End, 0.75, true);
                     setPathState(4);
                 }
                 break;
@@ -249,7 +257,7 @@ public class RED12 extends OpMode {
             case 9:
                 if(!follower.isBusy()) {
                     intake.setPower(INTAKE_IN_POWER);
-                    follower.followPath(pickup1ToPickup1End, true);
+                    follower.followPath(pickup1ToPickup1End, 0.75, true);
                     setPathState(10);
                 }
                 break;
@@ -278,7 +286,7 @@ public class RED12 extends OpMode {
 
             case 13:
                 if(!follower.isBusy()) {
-                    follower.followPath(pickup3ToPickup3End, true);
+                    follower.followPath(pickup3ToPickup3End, 0.75, true);
                     setPathState(14);
                 }
                 break;
@@ -374,15 +382,17 @@ public class RED12 extends OpMode {
         catapultMode = CatapultModes.HOLD;
         catapult1.setPower(CATAPULT_HOLD_POWER);
         catapult2.setPower(CATAPULT_HOLD_POWER);
+        prism = hardwareMap.get(GoBildaPrismDriver.class, "prism");
 
         telemetry.addData("Status", "Initialized");
         telemetry.update();
+        solidBlue.setBrightness(100);
+        prism.insertAndUpdateAnimation(GoBildaPrismDriver.LayerHeight.LAYER_0, solidBlue);
     }
 
     @Override
     public void init_loop() {
-        STATEMACHINEPERCHANCE.startingPose = follower.getPose();
-        VELOCITY_SHOT_RED.startingPose = follower.getPose();
+        RED.startingPose = follower.getPose();
     }
 
 
@@ -398,8 +408,7 @@ public class RED12 extends OpMode {
         intake.setPower(0);
         catapult1.setPower(0);
         catapult2.setPower(0);
-        VELOCITY_SHOT_RED.startingPose = follower.getPose();
-        STATEMACHINEPERCHANCE.startingPose = follower.getPose();
+        RED.startingPose = follower.getPose();
 
 
 
