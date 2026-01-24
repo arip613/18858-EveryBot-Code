@@ -12,11 +12,13 @@ import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.hardware.DcMotor;
 
-import org.firstinspires.ftc.teamcode.Tests.STATEMACHINEPERCHANCE;
-import org.firstinspires.ftc.teamcode.Tests.VELOCITY_SHOT_RED;
+import org.firstinspires.ftc.teamcode.Prism.Color;
+import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
+import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
+import org.firstinspires.ftc.teamcode.Teleop.BLUE;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "Awooga", group = "Auto")
+@Autonomous(name = "LM5BLUE", group = "Auto")
 public class BLUE12 extends OpMode {
 
     private Follower follower;
@@ -45,7 +47,7 @@ public class BLUE12 extends OpMode {
 
     private int pathState;
     private final Pose startPose = new Pose(116.69051321928461, 132.29237947122863, Math.toRadians(37)).mirror();
-    private final Pose scorePose = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(40)).mirror();
+    private final Pose scorePose = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(35)).mirror();
     private final Pose endPose = new Pose(115,68.5,Math.toRadians(0)).mirror();
 
     private final Pose pickup1Pose = new Pose(89, 88.5, Math.toRadians(0)).mirror();
@@ -53,15 +55,15 @@ public class BLUE12 extends OpMode {
     private final Pose pickup1AvoidPose = new Pose(92.76049766718508, 66.14618973561431, Math.toRadians(0)).mirror();
     //Note to Ari, fix positions.
     //private final Pose pickup2Pose = new Pose(20,20, Math.toRadians(0)); // Test Value to be removed.
-    private final Pose pickup2Pose = new Pose(98,62, Math.toRadians(0)).mirror();
+    private final Pose pickup2Pose = new Pose(96,62, Math.toRadians(0)).mirror();
     private final Pose pickup2EndPose = new Pose(126, 62, Math.toRadians(0)).mirror();
     private final Pose pickup2AvoidPose = new Pose(72, 84, Math.toRadians(0)).mirror();
 
-    private final Pose pickup3Pose = new Pose(91, 43, Math.toRadians(0)).mirror();
+    private final Pose pickup3Pose = new Pose(89, 43, Math.toRadians(0)).mirror();
     private final Pose pickup3EndPose = new Pose(126, 43, Math.toRadians(0)).mirror();
 
     private final Pose gateStartPose = new Pose(98, 67, Math.toRadians(0)).mirror();
-    private final Pose gateEndPose = new Pose(120.5, 69, Math.toRadians(0)).mirror(); //19.5, 68, 0
+    private final Pose gateEndPose = new Pose(123, 69, Math.toRadians(0)).mirror(); //19.5, 68, 0
     private PathChain startToScore;
     private PathChain scoreToPickup2;
     private PathChain pickup2ToPickup2End;
@@ -72,6 +74,9 @@ public class BLUE12 extends OpMode {
     private PathChain scoreToPickup1, pickup1ToPickup1End, pickup1EndToScore;
     private PathChain scoreToPickup3, pickup3ToPickup3End, pickup3ToScore, scoreToEndPose;
 
+    private PrismAnimations.Solid solidBlue = new PrismAnimations.Solid(Color.BLUE);
+
+    private GoBildaPrismDriver prism = null;
     public void buildPaths() {
         startToScore = follower.pathBuilder()
                 .addPath(new BezierLine(startPose, scorePose))
@@ -192,7 +197,7 @@ public class BLUE12 extends OpMode {
 
             case 3:
                 if(!follower.isBusy()) {
-                    follower.followPath(pickup2ToPickup2End, true);
+                    follower.followPath(pickup2ToPickup2End, 0.75, true);
                     setPathState(4);
                 }
                 break;
@@ -237,7 +242,7 @@ public class BLUE12 extends OpMode {
             case 9:
                 if(!follower.isBusy()) {
                     intake.setPower(INTAKE_IN_POWER);
-                    follower.followPath(pickup1ToPickup1End, true);
+                    follower.followPath(pickup1ToPickup1End, 0.75, true);
                     setPathState(10);
                 }
                 break;
@@ -266,7 +271,7 @@ public class BLUE12 extends OpMode {
 
             case 13:
                 if(!follower.isBusy()) {
-                    follower.followPath(pickup3ToPickup3End, true);
+                    follower.followPath(pickup3ToPickup3End, 0.75, true);
                     setPathState(14);
                 }
                 break;
@@ -351,6 +356,7 @@ public class BLUE12 extends OpMode {
         intake = hardwareMap.get(DcMotor.class, "intake");
         intake.setDirection(DcMotor.Direction.FORWARD);
         intake.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
+        prism = hardwareMap.get(GoBildaPrismDriver.class, "prism");
 
         catapult1 = hardwareMap.get(DcMotor.class, "catapult1");
         catapult2 = hardwareMap.get(DcMotor.class, "catapult2");
@@ -365,12 +371,13 @@ public class BLUE12 extends OpMode {
 
         telemetry.addData("Status", "Initialized");
         telemetry.update();
+        solidBlue.setBrightness(100);
+        prism.insertAndUpdateAnimation(GoBildaPrismDriver.LayerHeight.LAYER_0, solidBlue);
     }
 
     @Override
     public void init_loop() {
-        STATEMACHINEPERCHANCE.startingPose = follower.getPose();
-        VELOCITY_SHOT_RED.startingPose = follower.getPose();
+        BLUE.startingPose = follower.getPose();
     }
 
 
@@ -386,8 +393,7 @@ public class BLUE12 extends OpMode {
         intake.setPower(0);
         catapult1.setPower(0);
         catapult2.setPower(0);
-        VELOCITY_SHOT_RED.startingPose = follower.getPose();
-        STATEMACHINEPERCHANCE.startingPose = follower.getPose();
+        BLUE.startingPose = follower.getPose();
 
 
 
