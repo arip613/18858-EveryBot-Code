@@ -394,7 +394,6 @@ public class BLUE12 extends OpMode {
         catapult1.setPower(0);
         catapult2.setPower(0);
         BLUE.startingPose = follower.getPose();
-        BLUE1.startingPose = follower.getPose();
 
 
 
