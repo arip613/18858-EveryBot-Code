@@ -9,24 +9,28 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.HeadingInterpolator;
 import com.pedropathing.paths.Path;
 import com.pedropathing.paths.PathChain;
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
 
+import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.teamcode.Limelight.LimelightPoseUpdater;
 import org.firstinspires.ftc.teamcode.Prism.Color;
 import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
 import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Configurable
-@TeleOp(name = "LM5BLUE", group = "Teleop")
+@TeleOp(name = "BLUE TELE", group = "Teleop")
 public class BLUE extends OpMode {
 
     private boolean feetButton;
     private boolean isIntakeReversing;
-    private LedMode currentLedMode = LedMode.SOLID_WHITE; // Initialize to prevent NPE
+    private LedMode currentLedMode = LedMode.SOLID_WHITE;
     private boolean wasIntakeInPressed;
     private boolean wasIntakeOutPressed;
 
@@ -45,6 +49,9 @@ public class BLUE extends OpMode {
         LAUNCHING_DOWN,
         LAUNCHING_HOLD
     }
+
+
+
     private enum LedMode {
         SWIRL,
         INTAKE_REVERSE,
@@ -74,12 +81,13 @@ public class BLUE extends OpMode {
     private DcMotor catapult2 = null;
     private Servo foot1 = null;
     private Servo foot2 = null;
+    private Limelight3A camera;
+    private LimelightPoseUpdater limelightUpdater;
 
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
     private Pose VelocityShotSetpoint = new Pose(72, 82, Math.toRadians(37)).mirror();
-    private Pose ScoreSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(35)).mirror();
-    private Pose targetSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(35)).mirror();
+    private Pose targetSetpoint = new Pose(121.40906836664445, 122.0041889556019, Math.toRadians(37)).mirror();
     private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37)).mirror();
     private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37)).mirror();
     private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90)).mirror();
@@ -114,7 +122,6 @@ public class BLUE extends OpMode {
 
     private GoBildaPrismDriver prism = null;
 
-    // Create animation objects
     private PrismAnimations.Rainbow rainbow = new PrismAnimations.Rainbow();
     private PrismAnimations.Solid solidGreen = new PrismAnimations.Solid(Color.GREEN);
     private PrismAnimations.Solid solidRed = new PrismAnimations.Solid(Color.RED);
@@ -134,6 +141,8 @@ public class BLUE extends OpMode {
         follower.update();
 
         telemetryM = PanelsTelemetry.INSTANCE.getTelemetry();
+        camera = hardwareMap.get(Limelight3A.class, "limelight");
+
 
         intake = hardwareMap.get(DcMotor.class, "intake");
         catapult1 = hardwareMap.get(DcMotor.class, "catapult1");
@@ -154,14 +163,11 @@ public class BLUE extends OpMode {
         catapult1.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
         catapult2.setZeroPowerBehavior(DcMotor.ZeroPowerBehavior.BRAKE);
 
-        // Initialize Prism LED driver
         prism = hardwareMap.get(GoBildaPrismDriver.class, "prism");
 
-        // Configure rainbow animation
         rainbow.setSpeed(0.5f);
         rainbow.setBrightness(100);
 
-        // Configure solid color animations
         solidGreen.setBrightness(100);
         solidRed.setBrightness(100);
         solidBlue.setBrightness(100);
@@ -169,12 +175,10 @@ public class BLUE extends OpMode {
         solidCyan.setBrightness(100);
         solidPurple.setBrightness(100);
 
-        // Configure blink animation
         blinkBlueWhite.setBrightness(100);
         blinkBlueWhite.setPeriod(300);
         blinkBlueWhite.setPrimaryColorPeriod(150);
 
-        // Configure swirl animation
         swirlAnimation.setBrightness(100);
         swirlAnimation.setSpeed(0.5f);
 
@@ -185,6 +189,7 @@ public class BLUE extends OpMode {
     @Override
     public void start() {
         follower.startTeleopDrive();
+        camera.start();
         runtime.reset();
         stateTimer.reset();
         changeState(RobotState.STARTUP);
@@ -195,8 +200,28 @@ public class BLUE extends OpMode {
         follower.update();
         telemetryM.update();
 
-        // Handle input that applies to all states
-        handleGlobalInput();
+        Pose currentPose = follower.getPose();
+
+        LLResult result = camera.getLatestResult();
+        if (result != null && result.isValid()) {
+            Pose3D botpose3D = result.getBotpose();
+
+            if (botpose3D != null && result.getBotposeTagCount() > 0) {
+                double limelightX = botpose3D.getPosition().x;
+                double limelightY = botpose3D.getPosition().y;
+
+                Pose limelightPose = LimelightPoseUpdater.convertLimelightToPedro(
+                        limelightX, limelightY, follower.getHeading()
+                );
+
+                if (limelightUpdater == null) {
+                    limelightUpdater = new LimelightPoseUpdater(currentPose, limelightPose);
+                }
+
+                Pose fusedPose = limelightUpdater.getFusedPose(currentPose, limelightPose);
+                follower.setPose(fusedPose);
+            }
+        }
 
         // Execute current state
         switch (currentState) {
@@ -311,8 +336,8 @@ public class BLUE extends OpMode {
         if (checkForDriverInterruption()) return;
 
         double distanceToTarget = Math.hypot(
-                follower.getPose().getX() - ScoreSetpoint.getX(),
-                follower.getPose().getY() - ScoreSetpoint.getY()
+                follower.getPose().getX() - targetSetpoint.getX(),
+                follower.getPose().getY() - targetSetpoint.getY()
         );
 
         if (distanceToTarget < VELOCITY_SHOT_TOLERANCE) {
@@ -589,9 +614,9 @@ public class BLUE extends OpMode {
                 .addPath(new Path(new BezierLine(follower::getPose, VelocityShotSetpoint)))
                 .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
                         follower::getHeading, VelocityShotSetpoint.getHeading(), 0.8))
-                .addPath(new Path(new BezierLine(VelocityShotSetpoint, ScoreSetpoint)))
+                .addPath(new Path(new BezierLine(VelocityShotSetpoint, targetSetpoint)))
                 .setHeadingInterpolation(HeadingInterpolator.linear(
-                        VelocityShotSetpoint.getHeading(), ScoreSetpoint.getHeading()))
+                        VelocityShotSetpoint.getHeading(), targetSetpoint.getHeading()))
                 .build();
 
         follower.followPath(velocityShotPath);
@@ -661,6 +686,7 @@ public class BLUE extends OpMode {
         }
 
         String activeTarget = getActiveTargetName();
+
 
         telemetry.addData("State", currentState.toString());
         telemetry.addData("Active Target", activeTarget);

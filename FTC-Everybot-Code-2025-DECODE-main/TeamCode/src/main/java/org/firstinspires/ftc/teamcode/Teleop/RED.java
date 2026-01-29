@@ -9,21 +9,34 @@ import com.pedropathing.geometry.Pose;
 import com.pedropathing.paths.HeadingInterpolator;
 import com.pedropathing.paths.Path;
 import com.pedropathing.paths.PathChain;
+import com.qualcomm.hardware.limelightvision.LLResult;
+import com.qualcomm.hardware.limelightvision.Limelight3A;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.DcMotor;
 import com.qualcomm.robotcore.hardware.Servo;
 import com.qualcomm.robotcore.util.ElapsedTime;
+
+import org.firstinspires.ftc.robotcore.external.navigation.Pose3D;
+import org.firstinspires.ftc.teamcode.Limelight.LimelightPoseUpdater;
 import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
 import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 import org.firstinspires.ftc.teamcode.Prism.Color;
 import static org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
+import org.firstinspires.ftc.teamcode.Limelight.LimelightPoseUpdater;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Configurable
-@TeleOp(name = "LM5RED", group = "Teleop")
+@TeleOp(name = "BLUE TELE", group = "Teleop")
 public class RED extends OpMode {
+
+    // ==================== LED COLOR TRACKING ====================
+    private int currentB = 0;
+    private int currentG = 0;
+    private int currentR = 0;
+    private static final int COLOR_STEP = 5;
+    private boolean isGoalLedActive = false;
 
     // ==================== STATE MACHINE ENUMS ====================
     private enum RobotState {
@@ -50,7 +63,8 @@ public class RED extends OpMode {
         INTAKE,
         SOLID_BLUE,
         SOLID_WHITE,
-        BLINK
+        BLINK,
+        GOAL_LED  // Added for goal distance LED mode
     }
 
     private LedMode currentLedMode = null;
@@ -73,15 +87,19 @@ public class RED extends OpMode {
     private Servo foot1 = null;
     private Servo foot2 = null;
 
+    private Limelight3A camera;
+    private LimelightPoseUpdater limelightUpdater = null;
+
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
     private Pose VelocityShotSetpoint = new Pose(72, 82, Math.toRadians(37));
-    private Pose ScoreSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(42));
-    private Pose targetSetpoint = new Pose(112.6750092686662, 122.45208942216487, Math.toRadians(42));
+    private Pose targetSetpoint = new Pose(122.30486929977042, 123.12394012200939, Math.toRadians(37));
     private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37));
     private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37));
     private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90));
     private Pose gateWaypoint = new Pose(120.73170731707316, 72.5, Math.toRadians(90));
+
+    private double distanceToScore = 67.67; //funni number
 
     // ==================== CONSTANTS ====================
     private static final double SETPOINT_TOLERANCE = 2.0;
@@ -90,6 +108,7 @@ public class RED extends OpMode {
     private static final double LAUNCH_DOWN_DURATION = 0.4;
     private static final double STARTUP_DOWN_DURATION = 0.25;
     private static final double PARK_FOOT_DURATION = 2.0;
+    private static final double GOAL_LED_DISTANCE_THRESHOLD = 50.0;  // Distance threshold for goal LED
 
     private double INTAKE_IN_POWER = -1.0;
     private double INTAKE_OUT_POWER = 1.0;
@@ -114,6 +133,7 @@ public class RED extends OpMode {
     private PrismAnimations.Solid solidCyan = new PrismAnimations.Solid(Color.CYAN);
     private PrismAnimations.Blink blinkBlueWhite = new PrismAnimations.Blink(Color.BLUE, Color.WHITE);
     private PrismAnimations.Snakes swirlAnimation = new PrismAnimations.Snakes(Color.BLUE, Color.CYAN, Color.WHITE);
+    private PrismAnimations.Solid distanceSolid = new PrismAnimations.Solid(Color.BLUE);
 
     private boolean isIntakeRunning = false;
     private boolean isIntakeReversing = false;
@@ -136,6 +156,8 @@ public class RED extends OpMode {
         catapult2 = hardwareMap.get(DcMotor.class, "catapult2");
         foot1 = hardwareMap.get(Servo.class, "foot1");
         foot2 = hardwareMap.get(Servo.class, "foot2");
+        camera = hardwareMap.get(Limelight3A.class, "limelight");
+
 
         intake.setDirection(DcMotor.Direction.FORWARD);
         catapult1.setDirection(DcMotor.Direction.REVERSE);
@@ -179,6 +201,7 @@ public class RED extends OpMode {
     public void start() {
         follower.startTeleopDrive();
         runtime.reset();
+        camera.start();
         stateTimer.reset();
         changeState(RobotState.STARTUP);
     }
@@ -187,6 +210,39 @@ public class RED extends OpMode {
     public void loop() {
         follower.update();
         telemetryM.update();
+
+        Pose currentPose = follower.getPose();
+
+        LLResult result = camera.getLatestResult();
+        if (result != null && result.isValid()) {
+            Pose3D botpose3D = result.getBotpose_MT2();
+
+            if (botpose3D != null && result.getBotposeTagCount() > 0) {
+                double limelightX = botpose3D.getPosition().x;
+                double limelightY = botpose3D.getPosition().y;
+
+                Pose limelightPose = LimelightPoseUpdater.convertLimelightToPedro(
+                        limelightX, limelightY, follower.getHeading()
+                );
+
+                if (limelightUpdater == null) {
+                    limelightUpdater = new LimelightPoseUpdater(currentPose, limelightPose);
+                }
+
+                Pose fusedPose = limelightUpdater.getFusedPose(currentPose, limelightPose);
+                follower.setPose(fusedPose);
+            }
+        }
+
+        // Calculate distance to goal and update goal LED if needed
+        double distanceToGoal = calculateDistanceToGoal();
+        if (distanceToGoal > GOAL_LED_DISTANCE_THRESHOLD) {
+            isGoalLedActive = true;
+            updateSetSolidDistanceLED(getActiveGoalPose(), 100.0);
+        } else {
+            isGoalLedActive = false;
+            updateLEDsForState();
+        }
 
         handleGlobalInput();
 
@@ -229,6 +285,66 @@ public class RED extends OpMode {
         updateTelemetry();
     }
 
+    // ==================== GOAL LED HELPER METHODS ====================
+
+    // Helper method to get the active goal pose based on current state
+    private Pose getActiveGoalPose() {
+        switch (currentState) {
+            case NAVIGATING_TO_VELOCITY_SHOT:
+                return VelocityShotSetpoint;
+            case NAVIGATING_TO_VELOCITY_SCORE:
+                return targetSetpoint;
+            case NAVIGATING_TO_SETPOINT:
+                return targetSetpoint;
+            case NAVIGATING_TO_TARGET_ONE:
+                return targetOneSetpoint;
+            case NAVIGATING_TO_TARGET_TWO:
+                return targetTwoSetpoint;
+            case NAVIGATING_TO_GATE:
+                return gateSetpoint;
+            default:
+                return targetSetpoint;  // Default to main target
+        }
+    }
+
+    // Helper method to calculate distance to the current goal
+    private double calculateDistanceToGoal() {
+        Pose goalPose = getActiveGoalPose();
+        double dx = follower.getPose().getX() - goalPose.getX();
+        double dy = follower.getPose().getY() - goalPose.getY();
+        return Math.hypot(dx, dy);
+    }
+
+    private void updateSetSolidDistanceLED(Pose target, double maxDistance) {
+        double dx = follower.getPose().getX() - target.getX();
+        double dy = follower.getPose().getY() - target.getY();
+        double distance = Math.hypot(dx, dy);
+
+        distance = Math.min(distance, maxDistance);
+
+        // 0 = far, 1 = close
+        double t = 1.0 - (distance / maxDistance);
+
+        // TARGET color (SET, not interpolated)
+        int targetR = 0;
+        int targetG = (int)(255 * t);
+        int targetB = (int)(255 * (1.0 - t));
+
+        // Smooth stepping
+        currentR += stepToward(currentR, targetR);
+        currentG += stepToward(currentG, targetG);
+        currentB += stepToward(currentB, targetB);
+
+        distanceSolid.setPrimaryColor(currentR, currentG, currentB);
+        prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, distanceSolid);
+    }
+
+    private int stepToward(int current, int target) {
+        if (current < target) return Math.min(COLOR_STEP, target - current);
+        if (current > target) return -Math.min(COLOR_STEP, current - target);
+        return 0;
+    }
+
     // ==================== LED UPDATE ====================
     private void setLedMode(LedMode newMode) {
         if (newMode == currentLedMode) return; // <-- THIS stops flicker
@@ -254,9 +370,18 @@ public class RED extends OpMode {
             case BLINK:
                 prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, blinkBlueWhite);
                 break;
+            case GOAL_LED:
+                // Goal LED is handled by updateSetSolidDistanceLED, don't set mode here
+                break;
         }
     }
+
     private void updateLEDsForState() {
+        // Skip normal LED updates if goal LED is active
+        if (isGoalLedActive) {
+            return;
+        }
+
         if (feetButton) {
             setLedMode(LedMode.SWIRL);
             return;
@@ -358,8 +483,8 @@ public class RED extends OpMode {
         if (checkForDriverInterruption()) return;
 
         double distanceToTarget = Math.hypot(
-                follower.getPose().getX() - ScoreSetpoint.getX(),
-                follower.getPose().getY() - ScoreSetpoint.getY()
+                follower.getPose().getX() - targetSetpoint.getX(),
+                follower.getPose().getY() - targetSetpoint.getY()
         );
 
         if (distanceToTarget < VELOCITY_SHOT_TOLERANCE) {
@@ -492,6 +617,7 @@ public class RED extends OpMode {
         isIntakeReversing = true;
         updateLEDsForState();
     }
+
     private static final double FOOT_EPSILON = 0.02;
 
     private boolean isFootAllTheWayOut() {
@@ -571,9 +697,9 @@ public class RED extends OpMode {
                 .addPath(new Path(new BezierLine(follower::getPose, VelocityShotSetpoint)))
                 .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
                         follower::getHeading, VelocityShotSetpoint.getHeading(), 0.8))
-                .addPath(new Path(new BezierLine(VelocityShotSetpoint, ScoreSetpoint)))
+                .addPath(new Path(new BezierLine(VelocityShotSetpoint, targetSetpoint)))
                 .setHeadingInterpolation(HeadingInterpolator.linear(
-                        VelocityShotSetpoint.getHeading(), ScoreSetpoint.getHeading()))
+                        VelocityShotSetpoint.getHeading(), targetSetpoint.getHeading()))
                 .build();
 
         follower.followPath(velocityShotPath);
@@ -649,6 +775,8 @@ public class RED extends OpMode {
         telemetry.addData("Catapult Mode", catapultModeStr);
         telemetry.addData("Foot1 Position", "%.3f", foot1.getPosition());
         telemetry.addData("Foot2 Position", "%.3f", foot2.getPosition());
+        telemetry.addData("Distance to Goal", "%.2f", calculateDistanceToGoal());
+        telemetry.addData("Goal LED Active", isGoalLedActive ? "YES" : "NO");
         telemetry.update();
     }
 
