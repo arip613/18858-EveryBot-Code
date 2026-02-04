@@ -9,51 +9,71 @@ public class LimelightPoseUpdater {
     private final KalmanFilter xFilter;
     private final KalmanFilter yFilter;
 
-    public LimelightPoseUpdater(Pose currentPose, Pose limelightPose) {
-        this(currentPose, limelightPose, 0.2, 0.5);
+    /**
+     * Create a pose updater seeded with a known-good pose
+     * (this should be your first unfused Limelight pose).
+     */
+    public LimelightPoseUpdater(Pose initialPose) {
+        this.xFilter = new KalmanFilter(0.2, 0.5, initialPose.getX());
+        this.yFilter = new KalmanFilter(0.2, 0.5, initialPose.getY());
     }
 
-    public LimelightPoseUpdater(Pose currentPose, Pose limelightPose, double processNoise, double measurementNoise) {
-        this.xFilter = new KalmanFilter(processNoise, measurementNoise);
-        this.yFilter = new KalmanFilter(processNoise, measurementNoise);
+    /**
+     * Fuse a Limelight pose into the current estimate.
+     * Heading is intentionally NOT fused.
+     */
+    public Pose getFusedPose(Pose limelightPose, double currentHeading) {
+        double fusedX = xFilter.update(limelightPose.getX());
+        double fusedY = yFilter.update(limelightPose.getY());
+
+        return new Pose(fusedX, fusedY, currentHeading);
     }
 
-    public Pose getFusedPose(Pose currentPose, Pose limelightPose) {
-        double fusedX = xFilter.update(limelightPose.getX(), currentPose.getX());
-        double fusedY = yFilter.update(limelightPose.getY(), currentPose.getY());
-        double fusedHeading = currentPose.getHeading();
+    /**
+     * Convert Limelight meters into Pedro field coordinates (inches).
+     */
+    public static Pose convertLimelightToPedro(double limelightX,
+                                               double limelightY,
+                                               double currentHeading) {
 
-        return new Pose(fusedX, fusedY, fusedHeading);
-    }
-
-    public static Pose convertLimelightToPedro(double limelightX, double limelightY, double heading) {
         double xInches = limelightX * METERS_TO_INCHES;
         double yInches = limelightY * METERS_TO_INCHES;
 
+        // Field transform (matches your existing logic)
         double pedroX = yInches + 72;
         double pedroY = -xInches + 72;
 
-        return new Pose(pedroX, pedroY, heading);
+        return new Pose(pedroX, pedroY, currentHeading);
     }
 
+    /**
+     * Simple 1D Kalman filter for FTC-scale localization correction.
+     */
     private static class KalmanFilter {
-        private double processNoise;
-        private double measurementNoise;
-        private double estimate;
-        private double errorCovariance;
+        private final double processNoise;
+        private final double measurementNoise;
 
-        public KalmanFilter(double processNoise, double measurementNoise) {
+        private double estimate;
+        private double errorCovariance = 1.0;
+
+        public KalmanFilter(double processNoise,
+                            double measurementNoise,
+                            double initialEstimate) {
             this.processNoise = processNoise;
             this.measurementNoise = measurementNoise;
-            this.estimate = 0;
-            this.errorCovariance = 1;
+            this.estimate = initialEstimate;
         }
 
-        public double update(double measurement, double prediction) {
+
+        public double update(double measurement) {
             errorCovariance += processNoise;
-            double kalmanGain = errorCovariance / (errorCovariance + measurementNoise);
-            estimate = prediction + kalmanGain * (measurement - prediction);
-            errorCovariance = (1 - kalmanGain) * errorCovariance;
+
+            double kalmanGain =
+                    errorCovariance / (errorCovariance + measurementNoise);
+
+            estimate = estimate + kalmanGain * (measurement - estimate);
+            errorCovariance = (1.0 - kalmanGain) * errorCovariance;
+
             return estimate;
         }
     }

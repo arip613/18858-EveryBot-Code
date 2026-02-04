@@ -6,6 +6,7 @@ import com.bylazar.telemetry.TelemetryManager;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Vector;
 import com.pedropathing.paths.HeadingInterpolator;
 import com.pedropathing.paths.Path;
 import com.pedropathing.paths.PathChain;
@@ -23,16 +24,19 @@ import org.firstinspires.ftc.teamcode.Prism.Color;
 import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
 import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
+import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 @Configurable
-@TeleOp(name = "BLUE TELE", group = "Teleop")
-public class BLUE extends OpMode {
+@TeleOp(name = "BL00 TELE", group = "Teleop")
+public class  BLUE extends OpMode {
 
     private boolean feetButton;
     private boolean isIntakeReversing;
     private LedMode currentLedMode = LedMode.SOLID_WHITE;
     private boolean wasIntakeInPressed;
     private boolean wasIntakeOutPressed;
+
+
 
     // ==================== STATE MACHINE ENUMS ====================
     private enum RobotState {
@@ -48,6 +52,13 @@ public class BLUE extends OpMode {
         LAUNCHING_UP,
         LAUNCHING_DOWN,
         LAUNCHING_HOLD
+
+    }
+    private enum ShotState {
+        IDLE,
+        ROTATING,
+        DRIVING,
+        SHOOTING
     }
 
 
@@ -87,11 +98,15 @@ public class BLUE extends OpMode {
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
     private Pose VelocityShotSetpoint = new Pose(72, 82, Math.toRadians(37)).mirror();
-    private Pose targetSetpoint = new Pose(121.40906836664445, 122.0041889556019, Math.toRadians(37)).mirror();
+    private Pose targetSetpoint = new Pose(121.40906836664445, 122.0041889556019, Math.toRadians(40)).mirror();
     private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37)).mirror();
     private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37)).mirror();
     private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90)).mirror();
     private Pose gateWaypoint = new Pose(120.73170731707316, 72.5, Math.toRadians(90)).mirror();
+    private Pose parkSetpoint = new Pose(43.474387184684886, 39.59050310801249, Math.toRadians(230)).mirror();
+    private ShotState shotState = ShotState.IDLE;
+    private static final double ROTATION_TOLERANCE = Math.toRadians(5); // 5 degrees
+    private static final double SHOOT_DISTANCE = 32;
 
     // ==================== CONSTANTS ====================
     private static final double SETPOINT_TOLERANCE = 2.0;
@@ -194,39 +209,67 @@ public class BLUE extends OpMode {
         stateTimer.reset();
         changeState(RobotState.STARTUP);
     }
+    private void printScoreReadiness(Pose targetPose) {
+        Pose current = follower.getPose();
+
+        // Position error (inches)
+        double positionError = Math.hypot(
+                current.getX() - targetPose.getX(),
+                current.getY() - targetPose.getY()
+        );
+
+        // Heading error (radians + degrees)
+        double headingErrorRad = Math.abs(
+                AngleUnit.normalizeRadians(
+                        current.getHeading() - targetPose.getHeading()
+                )
+        );
+        double headingErrorDeg = Math.toDegrees(headingErrorRad);
+
+        // Readiness percent
+        double scorePercent = getScoreReadinessPercent(
+                current,
+                targetPose,
+                SCORE_MAX_POSITION_ERROR,
+                SCORE_MAX_HEADING_ERROR
+        );
+
+        telemetry.addData("Score Readiness", "%.1f %%", scorePercent);
+        telemetry.addData("Position Error (in)", "%.2f", positionError);
+        telemetry.addData("Heading Error (deg)", "%.2f", headingErrorDeg);
+    }
 
     @Override
     public void loop() {
         follower.update();
         telemetryM.update();
+        LLResult result = camera.getLatestResult();
+        printScoreReadiness(targetSetpoint);
 
+        Pose3D botpose3D = result.getBotpose();
         Pose currentPose = follower.getPose();
 
-        LLResult result = camera.getLatestResult();
         if (result != null && result.isValid()) {
-            Pose3D botpose3D = result.getBotpose();
-
             if (botpose3D != null && result.getBotposeTagCount() > 0) {
                 double limelightX = botpose3D.getPosition().x;
                 double limelightY = botpose3D.getPosition().y;
 
                 Pose limelightPose = LimelightPoseUpdater.convertLimelightToPedro(
-                        limelightX, limelightY, follower.getHeading()
+                        limelightX, limelightY, currentPose.getHeading()
                 );
 
-                if (limelightUpdater == null) {
-                    limelightUpdater = new LimelightPoseUpdater(currentPose, limelightPose);
-                }
+                Vector xVelocity = follower.getVelocity();
+                Double angularVelocity = follower.getAngularVelocity();
 
-                Pose fusedPose = limelightUpdater.getFusedPose(currentPose, limelightPose);
-                follower.setPose(fusedPose);
+                double linearVelocity = Math.hypot(xVelocity.getXComponent(), xVelocity.getYComponent());
+
+                if (linearVelocity < 2.0 && Math.abs(angularVelocity) < 2.0) {
+                    follower.setPose(limelightPose);
+                }
             }
         }
-
-        // Execute current state
         switch (currentState) {
-            case STARTUP:
-                handleStartup();
+            case STARTUP: handleStartup();
                 break;
             case MANUAL_DRIVE:
                 handleManualDrive();
@@ -257,6 +300,9 @@ public class BLUE extends OpMode {
                 break;
             case LAUNCHING_HOLD:
                 handleLaunchingHold();
+                break;
+            case NAVIGATING_TO_PARK:
+                handleNavigatingToPark();
                 break;
         }
 
@@ -304,6 +350,10 @@ public class BLUE extends OpMode {
         }
         if (gamepad1.b) {
             startNavigationToGate();
+            return;
+        }
+        if (gamepad1.dpad_right) {
+            startNavigationToPark();
             return;
         }
 
@@ -428,6 +478,21 @@ public class BLUE extends OpMode {
         changeState(RobotState.MANUAL_DRIVE);
     }
 
+    private void handleNavigatingToPark() {
+        if (checkForDriverInterruption()) return;
+
+        double distanceToTarget = Math.hypot(
+                follower.getPose().getX() - parkSetpoint.getX(),
+                follower.getPose().getY() - parkSetpoint.getY()
+        );
+
+        if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
+            foot1.setPosition(FOOT_DOWN_POSITION);
+            foot2.setPosition(FOOT_DOWN_POSITION);
+            changeState(RobotState.MANUAL_DRIVE);
+        }
+    }
+
     // ==================== HELPER METHODS ====================
 
     private void changeState(RobotState newState) {
@@ -489,6 +554,41 @@ public class BLUE extends OpMode {
                 prism.insertAndUpdateAnimation(GoBildaPrismDriver.LayerHeight.LAYER_0, blinkBlueWhite);
                 break;
         }
+    }
+    private static final double SCORE_MAX_POSITION_ERROR = 12.0; // inches
+    private static final double SCORE_MAX_HEADING_ERROR  = Math.toRadians(15);
+
+    private double getScoreReadinessPercent(
+            Pose current,
+            Pose scorePose,
+            double maxPositionError,        // inches where score = 0%
+            double maxHeadingErrorRadians   // radians where score = 0%
+    ) {
+        // Position error
+        double positionError = Math.hypot(
+                current.getX() - scorePose.getX(),
+                current.getY() - scorePose.getY()
+        );
+
+        // Heading error (wrapped)
+        double headingError = Math.abs(
+                AngleUnit.normalizeRadians(
+                        current.getHeading() - scorePose.getHeading()
+                )
+        );
+
+        // Normalize to 0–1
+        double positionScore = 1.0 - (positionError / maxPositionError);
+        double headingScore  = 1.0 - (headingError  / maxHeadingErrorRadians);
+
+        // Clamp
+        positionScore = Math.max(0.0, Math.min(1.0, positionScore));
+        headingScore  = Math.max(0.0, Math.min(1.0, headingScore));
+
+        // Combine (equal weight)
+        double combinedScore = (positionScore + headingScore) / 2.0;
+
+        return combinedScore * 100.0;
     }
 
     private void updateLEDsForState() {
@@ -597,6 +697,16 @@ public class BLUE extends OpMode {
         pivotMode = CatapultModes.HOLD;
         catapult1.setPower(CATAPULT_HOLD_POWER);
         catapult2.setPower(CATAPULT_HOLD_POWER);
+    }
+    private void startNavigationToPark() {
+        PathChain parkPath = follower.pathBuilder()
+                .addPath(new Path(new BezierLine(follower::getPose, parkSetpoint)))
+                .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
+                        follower::getHeading, parkSetpoint.getHeading(), 0.8))
+                .build();
+
+        follower.followPath(parkPath);
+        changeState(RobotState.NAVIGATING_TO_PARK);
     }
 
     private void handleIntakeDuringLaunch() {
@@ -717,6 +827,8 @@ public class BLUE extends OpMode {
                 return "VELOCITY_SHOT";
             default:
                 return "NONE";
+            case NAVIGATING_TO_PARK:
+                return "PARK";
         }
     }
 }
