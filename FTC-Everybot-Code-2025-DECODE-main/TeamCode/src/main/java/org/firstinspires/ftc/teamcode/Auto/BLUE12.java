@@ -18,7 +18,7 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 import org.firstinspires.ftc.teamcode.Teleop.BLUE;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "LM5BLUE", group = "Auto")
+@Autonomous(name = "BLUE AUTO", group = "Auto")
 public class BLUE12 extends OpMode {
 
     private Follower follower;

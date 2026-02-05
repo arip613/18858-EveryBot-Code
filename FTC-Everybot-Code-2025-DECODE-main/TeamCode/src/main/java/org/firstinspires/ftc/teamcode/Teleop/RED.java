@@ -28,9 +28,10 @@ import org.firstinspires.ftc.teamcode.Limelight.LimelightPoseUpdater;
 
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.Util.VelocityShotController;
+import org.firstinspires.ftc.teamcode.Prism.HeatMapController;
 
 @Configurable
-@TeleOp(name = "RED TELE", group = "Teleop")
+@TeleOp(name = "RED TELEOP", group = "Teleop")
 public class RED extends OpMode {
 
     // ==================== LED COLOR TRACKING ====================
@@ -105,19 +106,22 @@ public class RED extends OpMode {
     // ==================== VELOCITY SHOT CONTROLLER ====================
     private VelocityShotController velocityShotController;
 
+    // ==================== PROXIMITY LED CONTROLLER ====================
+    private HeatMapController proximityLEDController;
+
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
     private Pose VelocityShotSetpoint = new Pose(130, 137, Math.toRadians(37));
-    private Pose targetSetpoint = new Pose(122.30486929977042, 123.12394012200939, Math.toRadians(37));
+    private Pose targetSetpoint = new Pose(122.30486929977042, 123.12394012200939, Math.toRadians(40));
     private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37));
     private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37));
     private Pose gateSetpoint = new Pose(128.657, 72, Math.toRadians(90));
     private Pose gateWaypoint = new Pose(120.73170731707316, 72.5, Math.toRadians(90));
-
+    private Pose parkPose = new Pose(49.92228765124784, 44.81445334129396, Math.toRadians(230));
 
     // ==================== CONSTANTS ====================
-    private static final double SETPOINT_TOLERANCE = 2.0;
-    private static final double LAUNCH_UP_DURATION = 0.1;
+    private static final double SETPOINT_TOLERANCE = 2;
+    private static final double LAUNCH_UP_DURATION = 0.2;
     private static final double LAUNCH_DOWN_DURATION = 0.4;
     private static final double STARTUP_DOWN_DURATION = 0.25;
     private static final double GOAL_LED_DISTANCE_THRESHOLD = 5.0;
@@ -192,6 +196,8 @@ public class RED extends OpMode {
                 VelocityShotSetpoint.getHeading()
         );
 
+        proximityLEDController = new HeatMapController(prism);
+
         // Configure LED animations
         solidRed.setBrightness(100);
         solidBlue.setBrightness(100);
@@ -254,12 +260,12 @@ public class RED extends OpMode {
                         currentPose.getHeading()
                 );
 
-                    follower.setPose(limelightPose);
+                follower.setPose(limelightPose);
 
 
 
             }
-        } //sda
+        }
 
 
 
@@ -276,7 +282,9 @@ public class RED extends OpMode {
             case MANUAL_DRIVE:
                 handleManualDrive();
                 break;
-
+            case NAVIGATING_TO_PARK:
+                handleNavigatingToPark();
+                break;
             case NAVIGATING_TO_VELOCITY_SHOT:
                 handleNavigatingToVelocityShot();
                 break;
@@ -309,6 +317,18 @@ public class RED extends OpMode {
     // ==================== LED UPDATE SYSTEM ====================
 
     private void updateLEDs() {
+        // Check if we should use proximity LED mode (only in manual drive)
+        if (currentState == RobotState.MANUAL_DRIVE) {
+            boolean proximityLEDActive = proximityLEDController.update(follower, targetSetpoint);
+
+            if (proximityLEDActive) {
+                // Proximity LED is handling the display
+                currentLedMode = LedMode.GOAL_LED; // Reuse this mode to indicate proximity active
+                return;
+            }
+        }
+
+        // Original LED logic for all other cases
         double distanceToGoal = calculateDistanceToGoal();
 
         boolean shouldActivateGoalLed = isNavigatingState() &&
@@ -449,6 +469,8 @@ public class RED extends OpMode {
                 return targetTwoSetpoint;
             case NAVIGATING_TO_GATE:
                 return gateSetpoint;
+            case NAVIGATING_TO_PARK:
+                return parkPose;
             default:
                 return targetSetpoint;
         }
@@ -482,8 +504,13 @@ public class RED extends OpMode {
             return;
         }
 
+
         if (gamepad1.right_bumper) {
             startVelocityShotController();
+            return;
+        }
+        if (gamepad1.dpad_right) {
+            startNavigationToPark();
             return;
         }
         if (gamepad1.y) {
@@ -528,6 +555,22 @@ public class RED extends OpMode {
 
         if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
             changeState(RobotState.LAUNCHING_UP);
+        }
+    }
+
+    private void handleNavigatingToPark() {
+        if (checkForDriverInterruption()) return;
+
+        double distanceToTarget = Math.hypot(
+                follower.getPose().getX() - parkPose.getX(),
+                follower.getPose().getY() - parkPose.getY()
+        );
+
+        if (distanceToTarget < 2 && !follower.isBusy()) {
+            // Lower the feet
+            foot1.setPosition(FOOT_DOWN_POSITION);
+            foot2.setPosition(FOOT_DOWN_POSITION);
+            changeState(RobotState.MANUAL_DRIVE);
         }
     }
 
@@ -741,7 +784,7 @@ public class RED extends OpMode {
                 follower.getPose().getY() - VelocityShotSetpoint.getY()
         );
 
-        if (distanceToTarget < 50) {  // 32 inches
+        if (distanceToTarget < 50) {
             changeState(RobotState.LAUNCHING_UP);
         }
     }
@@ -766,6 +809,17 @@ public class RED extends OpMode {
 
         follower.followPath(targetOnePath);
         changeState(RobotState.NAVIGATING_TO_TARGET_ONE);
+    }
+
+    private void startNavigationToPark() {
+        PathChain parkPath = follower.pathBuilder()
+                .addPath(new Path(new BezierLine(follower::getPose, parkPose)))
+                .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
+                        follower::getHeading, parkPose.getHeading(), 0.1))
+                .build();
+
+        follower.followPath(parkPath);
+        changeState(RobotState.NAVIGATING_TO_PARK);
     }
 
     private void startNavigationToTargetTwo() {
@@ -819,6 +873,16 @@ public class RED extends OpMode {
         telemetry.addData("Goal LED Active", isGoalLedActive ? "YES" : "NO");
         telemetry.addData("LED Mode", currentLedMode != null ? currentLedMode.toString() : "NONE");
         telemetry.addData("LED RGB", String.format("R:%d G:%d B:%d", currentR, currentG, currentB));
+
+        // Add proximity LED telemetry
+        telemetry.addData("Proximity LED Active", proximityLEDController.isActive() ? "YES" : "NO");
+        if (proximityLEDController.isActive()) {
+            telemetry.addData("Proximity RGB", String.format("R:%d G:%d B:%d",
+                    proximityLEDController.getCurrentR(),
+                    proximityLEDController.getCurrentG(),
+                    proximityLEDController.getCurrentB()));
+        }
+
         telemetry.update();
     }
 
@@ -841,6 +905,8 @@ public class RED extends OpMode {
             case NAVIGATING_TO_GATE:
                 return "GATE";
             case NAVIGATING_TO_VELOCITY_SHOT:
+            case NAVIGATING_TO_PARK:
+                return "PARK";
             case NAVIGATING_TO_VELOCITY_SCORE:
                 return "VELOCITY_SHOT";
             default:

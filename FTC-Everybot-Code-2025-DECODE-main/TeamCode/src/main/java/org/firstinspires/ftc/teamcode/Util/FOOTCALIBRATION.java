@@ -1,10 +1,11 @@
 package org.firstinspires.ftc.teamcode.Util;
 
+import com.qualcomm.robotcore.eventloop.opmode.Disabled;
 import com.qualcomm.robotcore.eventloop.opmode.OpMode;
 import com.qualcomm.robotcore.eventloop.opmode.TeleOp;
 import com.qualcomm.robotcore.hardware.Servo;
 
-@TeleOp(name = "Foot Calibration", group = "Test")
+@Disabled
 public class FOOTCALIBRATION extends OpMode {
 
     private Servo foot1;
