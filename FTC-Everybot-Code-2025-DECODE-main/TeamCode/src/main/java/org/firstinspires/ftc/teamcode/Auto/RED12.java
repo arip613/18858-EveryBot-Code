@@ -20,7 +20,7 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 import org.firstinspires.ftc.teamcode.Teleop.RED;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "RED AUTO", group = "Auto")
+@Autonomous(name = "RED12", group = "Auto")
 public class RED12 extends OpMode {
 
     private Follower follower;
@@ -62,8 +62,8 @@ public class RED12 extends OpMode {
     private final Pose pickup2EndPose = new Pose(126, 62, Math.toRadians(0));
     private final Pose pickup2AvoidPose = new Pose(72, 84, Math.toRadians(0));
 
-    private final Pose pickup3Pose = new Pose(89, 43, Math.toRadians(0));
-    private final Pose pickup3EndPose = new Pose(126, 43, Math.toRadians(0));
+    private final Pose pickup3Pose = new Pose(89, 40, Math.toRadians(0));
+    private final Pose pickup3EndPose = new Pose(126, 40, Math.toRadians(0));
 
     private final Pose gateStartPose = new Pose(98, 67, Math.toRadians(0));
     private final Pose gateEndPose = new Pose(120.5, 69, Math.toRadians(0)); //19.5, 68, 0

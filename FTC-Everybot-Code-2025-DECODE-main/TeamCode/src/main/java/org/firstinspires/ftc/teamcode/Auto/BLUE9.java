@@ -18,8 +18,8 @@ import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
 import org.firstinspires.ftc.teamcode.Teleop.BLUE;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
-@Autonomous(name = "BLUE12", group = "Auto")
-public class BLUE12 extends OpMode {
+@Autonomous(name = "BLUE9", group = "Auto")
+public class BLUE9 extends OpMode {
 
     private Follower follower;
     private Timer waitTimer;
@@ -63,7 +63,7 @@ public class BLUE12 extends OpMode {
     private final Pose pickup3EndPose = new Pose(126, 40, Math.toRadians(0)).mirror();
 
     private final Pose gateStartPose = new Pose(98, 67, Math.toRadians(0)).mirror();
-    private final Pose gateEndPose = new Pose(123, 69, Math.toRadians(0)).mirror(); //19.5, 68, 0
+    private final Pose gateEndPose = new Pose(121.5, 74, Math.toRadians(360)).mirror(); //19.5, 68, 0
     private PathChain startToScore;
     private PathChain scoreToPickup2;
     private PathChain pickup2ToPickup2End;
@@ -217,12 +217,13 @@ public class BLUE12 extends OpMode {
                 break;
 
             case 6:
-                if(waitTimer.getElapsedTimeSeconds() > 1) {
+                if(waitTimer.getElapsedTimeSeconds() > 8) {
                     follower.followPath(gateEndToScore, true);
                     setPathState(7);
                     waitTimer.resetTimer();
                 }
                 break;
+
 
             case 7:
                 if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 1.8) {
@@ -263,45 +264,14 @@ public class BLUE12 extends OpMode {
                 break;
 
             case 12:
-                if(isCatapultReady()) {
-                    follower.followPath(scoreToPickup3, true);
+                if(isCatapultReady()){
+                    follower.followPath(scoreToEndPose, true);
                     setPathState(13);
                 }
                 break;
 
+
             case 13:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup3ToPickup3End, 0.75, true);
-                    setPathState(14);
-                }
-                break;
-
-            case 14:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup3ToScore, true);
-                    setPathState(15);
-                    waitTimer.resetTimer();
-                }
-                break;
-            case 15:
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.2) {
-                    launch();
-                    setPathState(16);
-                }
-                break;
-
-            case 16:
-                if(isCatapultReady()) {
-                    follower.followPath(follower.pathBuilder()
-                            .addPath(new BezierLine(scorePose, endPose))
-                            .setLinearHeadingInterpolation(scorePose.getHeading(), endPose.getHeading())
-                            .build(), true);
-                    setPathState(17);
-                }
-                break;
-
-
-            case 17:
                 if(!follower.isBusy()) {
                     intake.setPower(INTAKE_OFF_POWER);
                     setPathState(-1);

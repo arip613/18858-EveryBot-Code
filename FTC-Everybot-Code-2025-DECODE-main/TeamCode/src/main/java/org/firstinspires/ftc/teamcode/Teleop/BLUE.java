@@ -23,10 +23,10 @@ import org.firstinspires.ftc.teamcode.Limelight.LimelightPoseUpdater;
 import org.firstinspires.ftc.teamcode.Prism.Color;
 import org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver;
 import org.firstinspires.ftc.teamcode.Prism.PrismAnimations;
+import org.firstinspires.ftc.teamcode.Prism.HeatMapController;
 import static org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 import org.firstinspires.ftc.teamcode.Util.VelocityShotController;
-import org.firstinspires.ftc.teamcode.Prism.HeatMapController;
 import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 
 @Configurable
@@ -34,19 +34,12 @@ import org.firstinspires.ftc.robotcore.external.navigation.AngleUnit;
 public class BLUE extends OpMode {
 
     // ==================== LED COLOR TRACKING ====================
-    private int currentB = 0;
-    private int currentG = 0;
-    private int currentR = 0;
-    private static final int COLOR_STEP = 15;
-    private boolean isGoalLedActive = false;
-
     private boolean hasInitializedPoseFromLimelight = false;
     private boolean hasAcceptedFirstLimelightPose = false;
     private LimelightPoseUpdater limelightPoseUpdater = null;
 
     private ElapsedTime ledUpdateTimer = new ElapsedTime();
     private static final double LED_UPDATE_INTERVAL = 0.03;
-    private static final double DISTANCE_HYSTERESIS = 3.0;
 
     // ==================== STATE MACHINE ENUMS ====================
     private enum RobotState {
@@ -75,7 +68,7 @@ public class BLUE extends OpMode {
         SOLID_BLUE,
         SOLID_WHITE,
         BLINK,
-        GOAL_LED
+        HEATMAP
     }
 
     private LedMode currentLedMode = null;
@@ -103,13 +96,14 @@ public class BLUE extends OpMode {
 
     // ==================== VELOCITY SHOT CONTROLLER ====================
     private VelocityShotController velocityShotController;
+    private double velocityShotTolerance = 50;
 
-    // ==================== PROXIMITY LED CONTROLLER ====================
-    private HeatMapController proximityLEDController;
+    // ==================== HEATMAP LED CONTROLLER ====================
+    private HeatMapController heatMapController;
 
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
-    private Pose VelocityShotSetpoint = new Pose(134, 137, Math.toRadians(37)).mirror();
+    private Pose VelocityShotSetpoint = new Pose(134, 134, Math.toRadians(37)).mirror();
     private Pose targetSetpoint = new Pose(121.40906836664445, 122.0041889556019, Math.toRadians(40)).mirror();
     private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37)).mirror();
     private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37)).mirror();
@@ -122,9 +116,6 @@ public class BLUE extends OpMode {
     private static final double LAUNCH_UP_DURATION = 0.2;
     private static final double LAUNCH_DOWN_DURATION = 0.4;
     private static final double STARTUP_DOWN_DURATION = 0.25;
-    private static final double GOAL_LED_DISTANCE_THRESHOLD = 5.0;
-    private static final double SCORE_MAX_POSITION_ERROR = 12.0;
-    private static final double SCORE_MAX_HEADING_ERROR = Math.toRadians(15);
 
     private double INTAKE_IN_POWER = -1.0;
     private double INTAKE_OUT_POWER = 1.0;
@@ -149,7 +140,6 @@ public class BLUE extends OpMode {
     private PrismAnimations.Solid solidCyan = new PrismAnimations.Solid(Color.CYAN);
     private PrismAnimations.Blink blinkBlueWhite = new PrismAnimations.Blink(Color.BLUE, Color.WHITE);
     private PrismAnimations.Snakes swirlAnimation = new PrismAnimations.Snakes(Color.BLUE, Color.CYAN, Color.WHITE);
-    private PrismAnimations.Solid distanceSolid = new PrismAnimations.Solid(Color.BLUE);
 
     private boolean isIntakeRunning = false;
     private boolean isIntakeReversing = false;
@@ -196,7 +186,8 @@ public class BLUE extends OpMode {
                 VelocityShotSetpoint.getHeading()
         );
 
-        proximityLEDController = new HeatMapController(prism);
+        // Initialize HeatMap controller
+        heatMapController = new HeatMapController(prism);
 
         // Configure LED animations
         solidRed.setBrightness(100);
@@ -214,8 +205,6 @@ public class BLUE extends OpMode {
         swirlAnimation.setRepeatAfter(20);
         swirlAnimation.setBackgroundColor(Color.TRANSPARENT);
         swirlAnimation.setBrightness(100);
-
-        distanceSolid.setBrightness(100);
 
         telemetry.addData("Status", "Initialized");
         telemetry.update();
@@ -265,7 +254,7 @@ public class BLUE extends OpMode {
         }
 
         // Update LEDs
-        updateLEDs();
+        // updateLEDs();
 
         handleGlobalInput();
 
@@ -307,71 +296,26 @@ public class BLUE extends OpMode {
 
         updateTelemetry();
     }
-
+/*
     // ==================== LED UPDATE SYSTEM ====================
 
     private void updateLEDs() {
-        // Check if we should use proximity LED mode (only in manual drive)
-        if (currentState == RobotState.MANUAL_DRIVE) {
-            boolean proximityLEDActive = proximityLEDController.update(follower, targetSetpoint);
+        // First check if HeatMap should be active
+        if (isNavigatingState()) {
+            Pose targetPose = getActiveGoalPose();
+            boolean heatmapActive = heatMapController.update(follower, targetPose);
 
-            if (proximityLEDActive) {
-                // Proximity LED is handling the display
-                currentLedMode = LedMode.GOAL_LED; // Reuse this mode to indicate proximity active
-                return;
+            if (heatmapActive) {
+                currentLedMode = LedMode.HEATMAP;
+                return; // HeatMap is handling LEDs, don't override
             }
+        } else {
+            // Reset heatmap when not navigating
+            heatMapController.reset();
         }
 
-        // Original LED logic for all other cases
-        double distanceToGoal = calculateDistanceToGoal();
-
-        boolean shouldActivateGoalLed = isNavigatingState() &&
-                distanceToGoal > (GOAL_LED_DISTANCE_THRESHOLD + DISTANCE_HYSTERESIS);
-        boolean shouldDeactivateGoalLed = distanceToGoal < (GOAL_LED_DISTANCE_THRESHOLD - DISTANCE_HYSTERESIS);
-
-        if (shouldActivateGoalLed) {
-            isGoalLedActive = true;
-        } else if (shouldDeactivateGoalLed) {
-            isGoalLedActive = false;
-        }
-
-        if (isGoalLedActive && ledUpdateTimer.seconds() >= LED_UPDATE_INTERVAL) {
-            ledUpdateTimer.reset();
-            updateGoalDistanceLED(getActiveGoalPose(), 100.0);
-            currentLedMode = LedMode.GOAL_LED;
-        } else if (!isGoalLedActive) {
-            updateNormalLEDs();
-        }
-    }
-
-    private void updateGoalDistanceLED(Pose target, double maxDistance) {
-        double dx = follower.getPose().getX() - target.getX();
-        double dy = follower.getPose().getY() - target.getY();
-        double distance = Math.hypot(dx, dy);
-
-        distance = Math.min(distance, maxDistance);
-
-        double t = 1.0 - (distance / maxDistance);
-
-        int targetR = 0;
-        int targetG = (int)(255 * t);
-        int targetB = (int)(255 * (1.0 - t));
-
-        currentR = stepToward(currentR, targetR);
-        currentG = stepToward(currentG, targetG);
-        currentB = stepToward(currentB, targetB);
-
-        distanceSolid.setPrimaryColor(currentR, currentG, currentB);
-        prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, distanceSolid);
-    }
-
-    private int stepToward(int current, int target) {
-        if (current < target) {
-            return Math.min(current + COLOR_STEP, target);
-        } else if (current > target) {
-            return Math.max(current - COLOR_STEP, target);
-        }
-        return current;
+        // Fall back to normal LED behavior
+        updateNormalLEDs();
     }
 
     private void updateNormalLEDs() {
@@ -432,12 +376,15 @@ public class BLUE extends OpMode {
             case BLINK:
                 prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, blinkBlueWhite);
                 break;
-            case GOAL_LED:
+            case HEATMAP:
+                // Handled by HeatMapController
                 break;
         }
     }
+    */
 
-    // ==================== GOAL LED HELPER METHODS ====================
+
+    // ==================== HELPER METHODS ====================
 
     private boolean isNavigatingState() {
         return currentState == RobotState.VELOCITY_SHOT_ACTIVE ||
@@ -498,10 +445,22 @@ public class BLUE extends OpMode {
             return;
         }
 
-        if (gamepad1.right_bumper) {
+        // Right Bumper + Y = velocity shot with tolerance 50
+        if (gamepad1.right_bumper && gamepad1.y) {
+            velocityShotTolerance = 50;
             startVelocityShotController();
             return;
         }
+
+        // Right Bumper + X = velocity shot with tolerance 80
+        if (gamepad1.right_bumper && gamepad1.x) {
+            velocityShotTolerance = 80;
+            startVelocityShotController();
+            return;
+        }
+
+        // Right Bumper alone does nothing (no action here)
+
         if (gamepad1.dpad_right) {
             startNavigationToPark();
             return;
@@ -636,21 +595,13 @@ public class BLUE extends OpMode {
         previousState = currentState;
         currentState = newState;
         stateTimer.reset();
-
-        if (!isNavigatingState()) {
-            isGoalLedActive = false;
-        }
     }
 
     private void handleGlobalInput() {
+
         if (gamepad1.back) {
             Pose currentPose = follower.getPose();
-            follower.setPose(new Pose(currentPose.getX(), currentPose.getY(), 180));
-        }
-
-        if (gamepad1.start) {
-            Pose currentPose = follower.getPose();
-            follower.setPose(new Pose(currentPose.getX(), currentPose.getY(), 0));
+            follower.setPose(new Pose(currentPose.getX(), currentPose.getY(), Math.toRadians(180)));
         }
     }
 
@@ -757,7 +708,7 @@ public class BLUE extends OpMode {
         PathChain velocityShotPath = follower.pathBuilder()
                 .addPath(new Path(new BezierLine(follower::getPose, modifiedSetpoint)))
                 .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
-                        follower::getHeading, modifiedSetpoint.getHeading(), 0.1))
+                        follower::getHeading, modifiedSetpoint.getHeading(), 0.01))
                 .build();
 
         follower.followPath(velocityShotPath);
@@ -772,7 +723,7 @@ public class BLUE extends OpMode {
                 follower.getPose().getY() - VelocityShotSetpoint.getY()
         );
 
-        if (distanceToTarget < 50) {  // 32 inches
+        if (distanceToTarget < velocityShotTolerance) {
             changeState(RobotState.LAUNCHING_UP);
         }
     }
@@ -836,69 +787,6 @@ public class BLUE extends OpMode {
         changeState(RobotState.NAVIGATING_TO_GATE);
     }
 
-    private void printScoreReadiness(Pose targetPose) {
-        Pose current = follower.getPose();
-
-        // Position error (inches)
-        double positionError = Math.hypot(
-                current.getX() - targetPose.getX(),
-                current.getY() - targetPose.getY()
-        );
-
-        // Heading error (radians + degrees)
-        double headingErrorRad = Math.abs(
-                AngleUnit.normalizeRadians(
-                        current.getHeading() - targetPose.getHeading()
-                )
-        );
-        double headingErrorDeg = Math.toDegrees(headingErrorRad);
-
-        // Readiness percent
-        double scorePercent = getScoreReadinessPercent(
-                current,
-                targetPose,
-                SCORE_MAX_POSITION_ERROR,
-                SCORE_MAX_HEADING_ERROR
-        );
-
-        telemetry.addData("Score Readiness", "%.1f %%", scorePercent);
-        telemetry.addData("Position Error (in)", "%.2f", positionError);
-        telemetry.addData("Heading Error (deg)", "%.2f", headingErrorDeg);
-    }
-
-    private double getScoreReadinessPercent(
-            Pose current,
-            Pose scorePose,
-            double maxPositionError,
-            double maxHeadingErrorRadians
-    ) {
-        // Position error
-        double positionError = Math.hypot(
-                current.getX() - scorePose.getX(),
-                current.getY() - scorePose.getY()
-        );
-
-        // Heading error (wrapped)
-        double headingError = Math.abs(
-                AngleUnit.normalizeRadians(
-                        current.getHeading() - scorePose.getHeading()
-                )
-        );
-
-        // Normalize to 0–1
-        double positionScore = 1.0 - (positionError / maxPositionError);
-        double headingScore = 1.0 - (headingError / maxHeadingErrorRadians);
-
-        // Clamp
-        positionScore = Math.max(0.0, Math.min(1.0, positionScore));
-        headingScore = Math.max(0.0, Math.min(1.0, headingScore));
-
-        // Combine (equal weight)
-        double combinedScore = (positionScore + headingScore) / 2.0;
-
-        return combinedScore * 100.0;
-    }
-
     private void updateTelemetry() {
         String catapultModeStr;
         if (currentState == RobotState.STARTUP) {
@@ -921,18 +809,15 @@ public class BLUE extends OpMode {
         telemetry.addData("Foot1 Position", "%.3f", foot1.getPosition());
         telemetry.addData("Foot2 Position", "%.3f", foot2.getPosition());
         telemetry.addData("Distance to Goal", "%.2f", calculateDistanceToGoal());
-        telemetry.addData("Goal LED Active", isGoalLedActive ? "YES" : "NO");
         telemetry.addData("LED Mode", currentLedMode != null ? currentLedMode.toString() : "NONE");
-        telemetry.addData("LED RGB", String.format("R:%d G:%d B:%d", currentR, currentG, currentB));
+        telemetry.addData("Velocity Shot Tolerance", "%.0f", velocityShotTolerance);
 
-        // Add proximity LED telemetry
-        telemetry.addData("Proximity LED Active", proximityLEDController.isActive() ? "YES" : "NO");
-        if (proximityLEDController.isActive()) {
-            telemetry.addData("Proximity RGB", String.format("R:%d G:%d B:%d",
-                    proximityLEDController.getCurrentR(),
-                    proximityLEDController.getCurrentG(),
-                    proximityLEDController.getCurrentB()));
-        }
+        // Add HeatMap telemetry
+        telemetry.addData("HeatMap Active", heatMapController.isActive() ? "YES" : "NO");
+        telemetry.addData("HeatMap RGB", String.format("R:%d G:%d B:%d",
+                heatMapController.getCurrentR(),
+                heatMapController.getCurrentG(),
+                heatMapController.getCurrentB()));
 
         telemetry.update();
     }
