@@ -155,7 +155,7 @@ public class RED9 extends OpMode {
                 .setLinearHeadingInterpolation(scorePose.getHeading(), pickup2Pose.getHeading())
                 .build();
     }
-
+//hi
 
     private void launch() {
         catapultMode = CatapultModes.UP;
