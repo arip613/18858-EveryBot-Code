@@ -103,7 +103,7 @@ public class BLUE extends OpMode {
 
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
-    private Pose VelocityShotSetpoint = new Pose(134, 134, Math.toRadians(37)).mirror();
+    private Pose VelocityShotSetpoint = new Pose(150, 148, Math.toRadians(37)).mirror();
     private Pose targetSetpoint = new Pose(121.40906836664445, 122.0041889556019, Math.toRadians(40)).mirror();
     private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37)).mirror();
     private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37)).mirror();
@@ -254,7 +254,7 @@ public class BLUE extends OpMode {
         }
 
         // Update LEDs
-        // updateLEDs();
+        updateLEDs();
 
         handleGlobalInput();
 
@@ -296,25 +296,11 @@ public class BLUE extends OpMode {
 
         updateTelemetry();
     }
-/*
+
     // ==================== LED UPDATE SYSTEM ====================
 
     private void updateLEDs() {
-        // First check if HeatMap should be active
-        if (isNavigatingState()) {
-            Pose targetPose = getActiveGoalPose();
-            boolean heatmapActive = heatMapController.update(follower, targetPose);
 
-            if (heatmapActive) {
-                currentLedMode = LedMode.HEATMAP;
-                return; // HeatMap is handling LEDs, don't override
-            }
-        } else {
-            // Reset heatmap when not navigating
-            heatMapController.reset();
-        }
-
-        // Fall back to normal LED behavior
         updateNormalLEDs();
     }
 
@@ -381,7 +367,7 @@ public class BLUE extends OpMode {
                 break;
         }
     }
-    */
+
 
 
     // ==================== HELPER METHODS ====================
@@ -447,14 +433,14 @@ public class BLUE extends OpMode {
 
         // Right Bumper + Y = velocity shot with tolerance 50
         if (gamepad1.right_bumper && gamepad1.y) {
-            velocityShotTolerance = 50;
+            velocityShotTolerance = 90;
             startVelocityShotController();
             return;
         }
 
         // Right Bumper + X = velocity shot with tolerance 80
         if (gamepad1.right_bumper && gamepad1.x) {
-            velocityShotTolerance = 80;
+            velocityShotTolerance = 110;
             startVelocityShotController();
             return;
         }

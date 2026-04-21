@@ -20,8 +20,6 @@ import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 @Autonomous (name = "BLUE15", group = "what does this even do?")
 public class BLUE15FORTESTING extends OpMode {
 
-
-
     private Follower follower;
     private Timer waitTimer;
 
@@ -47,30 +45,25 @@ public class BLUE15FORTESTING extends OpMode {
     private Timer gateWaitTimer;
 
     private int pathState;
-    private final Pose startPose = new Pose(116.69051321928461, 132.29237947122863, Math.toRadians(37)).mirror();
-    private final Pose scorePose = new Pose(116.03426276788858, 125.3634424548243, Math.toRadians(37)).mirror();
-    private final Pose endPose = new Pose(110,132.29237, Math.toRadians(37)).mirror();
+    private final Pose startPose = new Pose(27.309, 132.292, Math.toRadians(143));
+    private final Pose scorePose = new Pose(27.966, 125.363, Math.toRadians(143));
 
-    private final Pose scoreEndPose = new Pose(130, 134, Math.toRadians(60)).mirror();
-    private final Pose pickup1Pose = new Pose(89, 87, Math.toRadians(0)).mirror();
-    private final Pose pickup1EndPose = new Pose(123.193, 87, Math.toRadians(0)).mirror();
-    private final Pose pickup1AvoidPose = new Pose(92.76049766718508, 66.14618973561431, Math.toRadians(0)).mirror();
-    //Note to Ari, fix positions.
-    //private final Pose pickup2Pose = new Pose(20,20, Math.toRadians(0)); // Test Value to be removed.
-    private final Pose pickup2Pose = new Pose(98,62, Math.toRadians(0)).mirror();
-    private final Pose pickup2EndPose = new Pose(126, 62, Math.toRadians(0)).mirror();
-    private final Pose pickup2AvoidPose = new Pose(72, 84, Math.toRadians(0)).mirror();
+    private final Pose ControlPose = new Pose(72, 72, Math.toRadians(1));
+    private final Pose endPose = new Pose(34, 132.292, Math.toRadians(143));
+    private final Pose scoreEndPose = new Pose(27.966, 125.363, Math.toRadians(143));
+    private final Pose pickup1Pose = new Pose(55, 87, Math.toRadians(180));
+    private final Pose pickup1EndPose = new Pose(20.807, 87, Math.toRadians(180));
+    private final Pose pickup1AvoidPose = new Pose(51.240, 66.146, Math.toRadians(180));
+    private final Pose pickup2Pose = new Pose(46, 62, Math.toRadians(180));
+    private final Pose pickup2EndPose = new Pose(18, 62, Math.toRadians(180));
+    private final Pose pickup2AvoidPose = new Pose(72, 84, Math.toRadians(180));
+    private final Pose Pickup3BackOff = new Pose(64, 43, Math.toRadians(120));
+    private final Pose pickup3Pose = new Pose(53, 42, Math.toRadians(180));
+    private final Pose pickup3EndPose = new Pose(18, 42, Math.toRadians(180));
+    private final Pose gateStartPose = new Pose(46, 63, Math.toRadians(180));
+    private final Pose gateEndPose = new Pose(21.5, 69.5, Math.toRadians(180));
+    private final Pose gateAndIntakePose = new Pose(15, 64.443, Math.toRadians(154));
 
-    private final Pose Pickup3BackOff = new Pose (80,43,Math.toRadians(60)).mirror();
-
-    private final Pose pickup3Pose = new Pose(91, 42, Math.toRadians(0)).mirror();
-    private final Pose pickup3EndPose = new Pose(126, 42, Math.toRadians(0)).mirror();
-
-
-
-    private final Pose gateStartPose = new Pose(98, 63, Math.toRadians(0)).mirror();
-    private final Pose gateEndPose = new Pose(120.5, 69.5, Math.toRadians(0)).mirror(); //19.5, 68, 0
-    private final Pose gateAndIntakePose = new Pose(126, 66.44323483670298, Math.toRadians(26)).mirror();
     private PathChain startToScore;
     private PathChain scoreToPickup2;
     private PathChain pickup2ToPickup2End;
@@ -79,7 +72,7 @@ public class BLUE15FORTESTING extends OpMode {
     private PathChain scoreToGateAndIntake;
     private PathChain gateAndIntakeToScore;
     private PathChain scoreToPickup1, pickup1ToPickup1End, pickup1EndToScore;
-    private PathChain scoreToPickup3, pickup3ToPickup3End, pickup3ToScore, scoreToEndPose;
+    private PathChain scoreToPickup3, pickup3ToPickup3End; // FIX: removed dead declarations pickup3ToScore, scoreToEndPose
     private PathChain pickup3ToPickup3Start, pickup3ToScoreEnd, scoreEndToEndPose;
 
 
@@ -88,11 +81,6 @@ public class BLUE15FORTESTING extends OpMode {
                 .addPath(new BezierLine(startPose, scorePose))
                 .setLinearHeadingInterpolation(startPose.getHeading(), scorePose.getHeading())
                 .build();
-        scoreToEndPose = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose, endPose))
-                .setLinearHeadingInterpolation(scorePose.getHeading(), endPose.getHeading())
-                .build();
-
 
         pickup2ToPickup2End = follower.pathBuilder()
                 .addPath(new BezierLine(pickup2Pose, pickup2EndPose))
@@ -101,23 +89,19 @@ public class BLUE15FORTESTING extends OpMode {
 
         pickup2EndToGateEnd = follower.pathBuilder()
                 .addPath(new BezierCurve(pickup2EndPose, gateStartPose, gateEndPose))
-                .setLinearHeadingInterpolation(pickup2EndPose.getHeading(), gateStartPose.getHeading())
+                .setLinearHeadingInterpolation(pickup2EndPose.getHeading(), gateEndPose.getHeading())
                 .build();
 
-
-        // Curved path from gateEnd through pickup1Avoid and pickup2Avoid to score
         gateEndToScore = follower.pathBuilder()
                 .addPath(new BezierCurve(gateEndPose, pickup1AvoidPose, pickup2AvoidPose, scorePose))
                 .setLinearHeadingInterpolation(gateEndPose.getHeading(), scorePose.getHeading())
                 .build();
 
-        // Curved path from score through pickup2Avoid to gateAndIntake
         scoreToGateAndIntake = follower.pathBuilder()
                 .addPath(new BezierCurve(scorePose, pickup2AvoidPose, pickup1AvoidPose, gateAndIntakePose))
                 .setLinearHeadingInterpolation(scorePose.getHeading(), gateAndIntakePose.getHeading())
                 .build();
 
-        // Curved path from gateAndIntake through pickup1Avoid and pickup2Avoid to score
         gateAndIntakeToScore = follower.pathBuilder()
                 .addPath(new BezierCurve(gateAndIntakePose, pickup1AvoidPose, pickup2AvoidPose, scorePose))
                 .setLinearHeadingInterpolation(gateAndIntakePose.getHeading(), scorePose.getHeading())
@@ -156,7 +140,7 @@ public class BLUE15FORTESTING extends OpMode {
                 .build();
 
         pickup3ToScoreEnd = follower.pathBuilder()
-                .addPath(new BezierLine(Pickup3BackOff, scoreEndPose))
+                .addPath(new BezierCurve(pickup3EndPose, ControlPose, scoreEndPose))
                 .setLinearHeadingInterpolation(Pickup3BackOff.getHeading(), scoreEndPose.getHeading(), 0.01)
                 .build();
 
@@ -164,14 +148,13 @@ public class BLUE15FORTESTING extends OpMode {
                 .addPath(new BezierCurve(scorePose, pickup2AvoidPose, pickup2Pose))
                 .setLinearHeadingInterpolation(scorePose.getHeading(), pickup2Pose.getHeading())
                 .build();
+
+        // FIX: added missing scoreEndToEndPose build
         scoreEndToEndPose = follower.pathBuilder()
                 .addPath(new BezierLine(scoreEndPose, endPose))
                 .setLinearHeadingInterpolation(scoreEndPose.getHeading(), endPose.getHeading())
                 .build();
     }
-
-
-
 
     private void launch() {
         catapultMode = CatapultModes.UP;
@@ -202,10 +185,11 @@ public class BLUE15FORTESTING extends OpMode {
                 velocity.getYComponent()
         );
 
-        if (catapultMode == CatapultModes.UP && linearVelocity < 2 && Math.abs(angularVelocity) < 2) {
+        if (catapultMode == CatapultModes.UP && linearVelocity < 3 && Math.abs(angularVelocity) < 3) {
             return true;
+        } else {
+            return false;
         }
-       else { return false;}
     }
 
     public void autonomousPathUpdate() {
@@ -231,7 +215,6 @@ public class BLUE15FORTESTING extends OpMode {
                 break;
 
             case 2:
-
                 if (isCatapultReady()) {
                     intake.setPower(INTAKE_IN_POWER);
                     follower.followPath(scoreToPickup2, true);
@@ -350,21 +333,29 @@ public class BLUE15FORTESTING extends OpMode {
                     setPathState(18);
                 }
                 break;
+
             case 18:
                 if (!follower.isBusy()) {
                     follower.followPath(pickup3ToScoreEnd, true);
                     setPathState(19);
                 }
                 break;
+
             case 19:
-                if (distanceToTarget < 55) {
+                if (!follower.isBusy()) {
                     launch();
-                    follower.followPath(scoreEndToEndPose, true);
                     setPathState(20);
                 }
                 break;
 
             case 20:
+                if (isCatapultReady()) {
+                    follower.followPath(scoreEndToEndPose, true);
+                    setPathState(21);
+                }
+                break;
+
+            case 21:
                 if (!follower.isBusy()) {
                     intake.setPower(INTAKE_OFF_POWER);
                     setPathState(-1);
@@ -372,6 +363,7 @@ public class BLUE15FORTESTING extends OpMode {
                 break;
         }
     }
+
     public void setPathState(int pState) {
         pathState = pState;
         pathTimer.resetTimer();
@@ -383,9 +375,6 @@ public class BLUE15FORTESTING extends OpMode {
         updateCatapult();
         autonomousPathUpdate();
         telemetryM.update();
-
-
-
 
         telemetry.addData("path state", pathState);
         telemetry.addData("catapult mode", catapultMode);
@@ -443,7 +432,6 @@ public class BLUE15FORTESTING extends OpMode {
         BLUE.startingPose = follower.getPose();
     }
 
-
     @Override
     public void start() {
         opmodeTimer.resetTimer();
@@ -457,6 +445,5 @@ public class BLUE15FORTESTING extends OpMode {
         catapult1.setPower(0);
         catapult2.setPower(0);
         BLUE.startingPose = follower.getPose();
-
     }
 }

@@ -19,7 +19,8 @@ import org.firstinspires.ftc.teamcode.Teleop.BLUE;
 import org.firstinspires.ftc.teamcode.pedroPathing.Constants;
 
 @Autonomous(name = "BLUE12", group = "Auto")
-public class BLUE12 extends OpMode {
+public class
+BLUE12 extends OpMode {
 
     private Follower follower;
     private Timer waitTimer;

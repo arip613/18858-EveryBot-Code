@@ -6,6 +6,7 @@ import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierCurve;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
+import com.pedropathing.math.Vector;
 import com.pedropathing.paths.PathChain;
 import com.pedropathing.util.Timer;
 import com.qualcomm.robotcore.eventloop.opmode.Autonomous;
@@ -53,6 +54,8 @@ public class RED12 extends OpMode {
     private final Pose scorePose = new Pose(116.03426276788858, 125.3634424548243, Math.toRadians(40));
     private final Pose endPose = new Pose(115,68.5,Math.toRadians(0));
 
+    private final Pose ControlPose = new Pose(60,72,0);
+    private final Pose ControlPose2 = new Pose(60,30);
     private final Pose pickup1Pose = new Pose(89, 88.5, Math.toRadians(0));
     private final Pose pickup1EndPose = new Pose(123.193, 88.5, Math.toRadians(0));
     private final Pose pickup1AvoidPose = new Pose(92.76049766718508, 66.14618973561431, Math.toRadians(0));
@@ -66,7 +69,7 @@ public class RED12 extends OpMode {
     private final Pose pickup3EndPose = new Pose(126, 40, Math.toRadians(0));
 
     private final Pose gateStartPose = new Pose(98, 67, Math.toRadians(0));
-    private final Pose gateEndPose = new Pose(120.5, 69, Math.toRadians(0)); //19.5, 68, 0
+    private final Pose gateEndPose = new Pose(120.5, 73, Math.toRadians(340)); //19.5, 68, 0
     private final Pose gateAndIntakePose = new Pose(130.98911353032653, 61.44323483670298, Math.toRadians(15.67));
     private PathChain startToScore;
     private PathChain scoreToPickup2;
@@ -75,7 +78,7 @@ public class RED12 extends OpMode {
     private PathChain gateEndToScore;
     private PathChain scoreToGateAndIntake;
     private PathChain gateAndIntakeToScore;
-    private PathChain scoreToPickup1, pickup1ToPickup1End, pickup1EndToScore;
+    private PathChain scoreToPickup1, pickup1ToPickup1End, pickup1EndToScore, pickup3toEnd;
     private PathChain scoreToPickup3, pickup3ToPickup3End, pickup3ToScore, scoreToEndPose;
     private PrismAnimations.Solid solidBlue = new PrismAnimations.Solid(Color.BLUE);
 
@@ -94,6 +97,8 @@ public class RED12 extends OpMode {
                 .build();
 
 
+
+
         pickup2ToPickup2End = follower.pathBuilder()
                 .addPath(new BezierLine(pickup2Pose, pickup2EndPose))
                 .setLinearHeadingInterpolation(pickup2Pose.getHeading(), pickup2EndPose.getHeading())
@@ -101,7 +106,7 @@ public class RED12 extends OpMode {
         
         pickup2EndToGateEnd = follower.pathBuilder()
                 .addPath(new BezierCurve(pickup2EndPose, gateStartPose, gateEndPose))
-                .setLinearHeadingInterpolation(pickup2EndPose.getHeading(), gateStartPose.getHeading())
+                .setLinearHeadingInterpolation(pickup2EndPose.getHeading(), gateEndPose.getHeading())
                 .build();
 
 
@@ -140,7 +145,7 @@ public class RED12 extends OpMode {
                 .build();
 
         scoreToPickup3 = follower.pathBuilder()
-                .addPath(new BezierLine(scorePose, pickup3Pose))
+                .addPath(new BezierCurve(scorePose, ControlPose, pickup3Pose))
                 .setLinearHeadingInterpolation(scorePose.getHeading(), pickup3Pose.getHeading())
                 .build();
 
@@ -150,8 +155,14 @@ public class RED12 extends OpMode {
                 .setVelocityConstraint(0.5)
                 .build();
 
+        pickup3toEnd = follower.pathBuilder()
+                .addPath(new BezierLine(pickup3EndPose, endPose))
+                .setLinearHeadingInterpolation(pickup3EndPose.getHeading(), endPose.getHeading())
+                .build();
+
+
         pickup3ToScore = follower.pathBuilder()
-                .addPath(new BezierCurve(pickup3EndPose, pickup2Pose, scorePose))
+                .addPath(new BezierCurve(pickup3EndPose, ControlPose2, ControlPose, scorePose))
                 .setLinearHeadingInterpolation(pickup3EndPose.getHeading(), scorePose.getHeading())
                 .build();
         scoreToPickup2 = follower.pathBuilder()
@@ -182,148 +193,157 @@ public class RED12 extends OpMode {
     }
 
     private boolean isCatapultReady() {
-        return catapultMode == CatapultModes.HOLD;
-    }
+        Vector velocity = follower.getVelocity();
+        double angularVelocity = follower.getAngularVelocity();
 
+        double linearVelocity = Math.hypot(
+                velocity.getXComponent(),
+                velocity.getYComponent()
+        );
+
+        if (catapultMode == RED12.CatapultModes.UP && linearVelocity < 3 && Math.abs(angularVelocity) < 3) {
+            return true;
+        } else {
+            return false;
+        }
+    }
     public void autonomousPathUpdate() {
         switch (pathState) {
-            case 0:
-                // Go to Score Position
-                follower.followPath(startToScore, true);
-                intake.setPower(INTAKE_IN_POWER);
-                setPathState(1);
-                waitTimer.resetTimer();
-                break;
+                    case 0: // Go to Score Position
+                        follower.followPath(startToScore, true);
+                        intake.setPower(INTAKE_IN_POWER);
+                        setPathState(1);
+                        waitTimer.resetTimer();
+                        break;
 
-            case 1:
-                //After waiting for 0.7 secs if NOT moving.
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.7) {
-                    launch();
-                    setPathState(2);
-                }
-                break;
+                    case 1: // Wait after reaching score position
+                        if(!follower.isBusy()) {
+                            launch();
+                            setPathState(2);
+                        }
+                        break;
 
-            case 2:
+                    case 2: // After first shot, go to pickup3
+                        if(isCatapultReady()) {
+                            intake.setPower(INTAKE_IN_POWER);
+                            follower.followPath(scoreToPickup3, true);
+                            setPathState(3);
+                        }
+                        break;
 
-                if(isCatapultReady()) {
-                    intake.setPower(INTAKE_IN_POWER);
-                    follower.followPath(scoreToPickup2, true);
-                    setPathState(3);
-                }
-                break;
+                    case 3: // Sweep pickup3
+                        if(!follower.isBusy()) {
+                            follower.followPath(pickup3ToPickup3End, 0.75, true);
+                            setPathState(4);
+                        }
+                        break;
 
-            case 3:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup2ToPickup2End, 0.75, true);
-                    setPathState(4);
-                }
-                break;
+                    case 4: // Return to score from pickup3
+                        if(!follower.isBusy()) {
+                            follower.followPath(pickup3ToScore, true);
+                            setPathState(5);
+                            waitTimer.resetTimer();
+                        }
+                        break;
 
-            case 4:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup2EndToGateEnd, 0.65, true);
-                    setPathState(5);
-                }
-                break;
+                    case 5: // Wait and shoot at score
+                        if(!follower.isBusy()) {
+                            launch();
+                            setPathState(6);
+                        }
+                        break;
 
-            case 5:
-                if(!follower.isBusy()) {
-                    waitTimer.resetTimer();
-                    setPathState(6);
-                }
-                break;
+                    case 6: // After second shot, go to pickup2
+                        if(isCatapultReady()) {
+                            intake.setPower(INTAKE_IN_POWER);
+                            follower.followPath(scoreToPickup2, true);
+                            setPathState(7);
+                        }
+                        break;
 
-            case 6:
-                if(waitTimer.getElapsedTimeSeconds() > 1) {
-                    follower.followPath(gateEndToScore, true);
-                    setPathState(7);
-                    waitTimer.resetTimer();
-                }
-                break;
+                    case 7: // Sweep pickup2
+                        if(!follower.isBusy()) {
+                            follower.followPath(pickup2ToPickup2End, 0.75, true);
+                            setPathState(8);
+                        }
+                        break;
 
-            case 7:
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 1.8) {
-                    launch();
-                    setPathState(8);
-                    waitTimer.resetTimer();
-                }
-                break;
+                    case 8: // Move to gate end
+                        if(!follower.isBusy()) {
+                            follower.followPath(pickup2EndToGateEnd, 0.65, true);
+                            setPathState(9);
+                        }
+                        break;
 
-            case 8:
-                if(isCatapultReady()) {
-                    follower.followPath(scoreToPickup1, true);
-                    setPathState(9);
-                }
-                break;
+                    case 9: // Wait at gate
+                        if(!follower.isBusy()) {
+                            waitTimer.resetTimer();
+                            setPathState(10);
+                        }
+                        break;
 
-            case 9:
-                if(!follower.isBusy()) {
-                    intake.setPower(INTAKE_IN_POWER);
-                    follower.followPath(pickup1ToPickup1End, 0.75, true);
-                    setPathState(10);
-                }
-                break;
+                    case 10: // Open gate wait, then go to score
+                        if(waitTimer.getElapsedTimeSeconds() > 2) {
+                            follower.followPath(gateEndToScore, true);
+                            setPathState(11);
+                            waitTimer.resetTimer();
+                        }
+                        break;
 
-            case 10:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup1EndToScore, true);
-                    setPathState(11);
-                    waitTimer.resetTimer();
-                }
-                break;
+                    case 11: // Wait and shoot at score
+                        if(!follower.isBusy()) {
+                            launch();
+                            setPathState(12);
+                            waitTimer.resetTimer();
+                        }
+                        break;
 
-            case 11:
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.5) {
-                    launch();
-                    setPathState(12);
-                }
-                break;
+                    case 12: // After third shot, go to pickup1
+                        if(isCatapultReady()) {
+                            follower.followPath(scoreToPickup1, true);
+                            setPathState(13);
+                        }
+                        break;
 
-            case 12:
-                if(isCatapultReady()) {
-                    follower.followPath(scoreToPickup3, true);
-                    setPathState(13);
-                }
-                break;
+                    case 13: // Sweep pickup1
+                        if(!follower.isBusy()) {
+                            intake.setPower(INTAKE_IN_POWER);
+                            follower.followPath(pickup1ToPickup1End, 0.75, true);
+                            setPathState(14);
+                        }
+                        break;
 
-            case 13:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup3ToPickup3End, 0.75, true);
-                    setPathState(14);
-                }
-                break;
+                    case 14: // Return to score from pickup1
+                        if(!follower.isBusy()) {
+                            follower.followPath(pickup1EndToScore, true);
+                            setPathState(15);
+                            waitTimer.resetTimer();
+                        }
+                        break;
 
-            case 14:
-                if(!follower.isBusy()) {
-                    follower.followPath(pickup3ToScore, true);
-                    setPathState(15);
-                    waitTimer.resetTimer();
-                }
-                break;
-            case 15:
-                if(!follower.isBusy() && waitTimer.getElapsedTimeSeconds() > 0.2) {
-                    launch();
-                    setPathState(16);
-                }
-                break;
+                    case 15: // Wait and shoot final shot
+                        if(!follower.isBusy()) {
+                            launch();
+                            setPathState(16);
+                        }
+                        break;
 
-            case 16:
-                if(isCatapultReady()) {
-                    follower.followPath(follower.pathBuilder()
-                            .addPath(new BezierLine(scorePose, endPose))
-                            .setLinearHeadingInterpolation(scorePose.getHeading(), endPose.getHeading())
-                            .build(), true);
-                    setPathState(17);
-                }
-                break;
+                    case 16: // Drive to end pose
+                        if(isCatapultReady()) {
+                            follower.followPath(follower.pathBuilder()
+                                    .addPath(new BezierLine(scorePose, endPose))
+                                    .setLinearHeadingInterpolation(scorePose.getHeading(), endPose.getHeading())
+                                    .build(), true);
+                            setPathState(17);
+                        }
+                        break;
 
-
-            case 17:
-                if(!follower.isBusy()) {
-                    intake.setPower(INTAKE_OFF_POWER);
-                    setPathState(-1);
-                }
-                break;
+                    case 17: // Done
+                        if(!follower.isBusy()) {
+                            intake.setPower(INTAKE_OFF_POWER);
+                            setPathState(-1);
+                        }
+                        break;
         }
     }
     public void setPathState(int pState) {

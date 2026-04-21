@@ -103,7 +103,7 @@ public class RED extends OpMode {
 
     // ==================== NAVIGATION SETPOINTS ====================
     public static Pose startingPose;
-    private Pose VelocityShotSetpoint = new Pose(130, 134, Math.toRadians(37));
+    private Pose VelocityShotSetpoint = new Pose(150, 148, Math.toRadians(37));
     private Pose targetSetpoint = new Pose(122.30486929977042, 123.12394012200939, Math.toRadians(40));
     private Pose targetOneSetpoint = new Pose(102.34525660964229, 110.63141524105754, Math.toRadians(37));
     private Pose targetTwoSetpoint = new Pose(112.64696734059099, 119.58942457231727, Math.toRadians(37));
@@ -253,8 +253,7 @@ public class RED extends OpMode {
             }
         }
 
-        // Update LEDs
-
+    updateLEDs();
 
         handleGlobalInput();
 
@@ -297,21 +296,9 @@ public class RED extends OpMode {
         updateTelemetry();
     }
 
-    // ==================== LED UPDATE SYSTEM ====================
-/*
+
+
       private void updateLEDs() {
-        if (isNavigatingState()) {
-            Pose targetPose = getActiveGoalPose();
-            boolean heatmapActive = heatMapController.update(follower, targetPose);
-
-            if (heatmapActive) {
-                currentLedMode = LedMode.HEATMAP;
-                return;
-            }
-        } else {
-            heatMapController.reset();
-        }
-
         updateNormalLEDs();
     }
 
@@ -350,7 +337,7 @@ public class RED extends OpMode {
                 break;
         }
     }
-    */
+
 
     private void setLedMode(LedMode newMode) {
         if (newMode == currentLedMode) return;
@@ -442,14 +429,14 @@ public class RED extends OpMode {
 
         // Right Bumper + Y = velocity shot with tolerance 50
         if (gamepad1.right_bumper && gamepad1.y) {
-            velocityShotTolerance = 50;
+            velocityShotTolerance = 90;
             startVelocityShotController();
             return;
         }
 
         // Right Bumper + X = velocity shot with tolerance 80
         if (gamepad1.right_bumper && gamepad1.x) {
-            velocityShotTolerance = 80;
+            velocityShotTolerance = 110;
             startVelocityShotController();
             return;
         }
