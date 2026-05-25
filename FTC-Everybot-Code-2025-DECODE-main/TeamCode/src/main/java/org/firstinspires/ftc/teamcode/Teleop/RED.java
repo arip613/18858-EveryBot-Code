@@ -3,6 +3,8 @@ package org.firstinspires.ftc.teamcode.Teleop;
 import com.bylazar.configurables.annotations.Configurable;
 import com.bylazar.telemetry.PanelsTelemetry;
 import com.bylazar.telemetry.TelemetryManager;
+import com.pedropathing.control.PIDFCoefficients;
+import com.pedropathing.control.PIDFController;
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.BezierLine;
 import com.pedropathing.geometry.Pose;
@@ -68,6 +70,7 @@ public class RED extends OpMode {
         SOLID_BLUE,
         SOLID_WHITE,
         BLINK,
+        BLUE_WAVE,
         HEATMAP
     }
 
@@ -113,11 +116,14 @@ public class RED extends OpMode {
 
     // ==================== CONSTANTS ====================
     private static final double SETPOINT_TOLERANCE = 2;
+    private static final double LAUNCH_HEADING_TOLERANCE = Math.toRadians(5);
+    private static final double LAUNCH_MAX_LINEAR_SPEED = 4.0;   // in/s
+    private static final double LAUNCH_MAX_ANGULAR_SPEED = 0.7;  // rad/s
     private static final double LAUNCH_UP_DURATION = 0.35;
-    private static final double LAUNCH_DOWN_DURATION = 0.4;
+    private static final double LAUNCH_DOWN_DURATION = 0.6;
     private static final double STARTUP_DOWN_DURATION = 0.25;
 
-    private double INTAKE_IN_POWER = -1.0;
+    private double INTAKE_IN_POWER = -0.8;
     private double INTAKE_OUT_POWER = 1.0;
     private double INTAKE_OFF_POWER = 0.0;
     private double FOOT_UP_POSITION = 0.5;
@@ -131,6 +137,18 @@ public class RED extends OpMode {
     private boolean wasFootDownPressed = false;
     private CatapultModes pivotMode;
     private FootMode footmode;
+    private boolean isHoldingPosition = false;
+    private Pose lastHoldPose = null;
+    private static final double DRIVER_DEADZONE = 0.1;
+    private static final double HOLD_CAPTURE_SPEED = 0.5;        // in/s
+    private static final double HOLD_CAPTURE_ANGULAR_SPEED = 0.5; // rad/s
+    private static final double HOLD_DISTURBANCE_DISTANCE = 7.0;          // in
+    private static final double HOLD_DISTURBANCE_HEADING = Math.toRadians(30);
+    private static final double HEADING_LOCK_ANGLE = Math.toRadians(34);  // angle to snap to while B held
+    // Heading-lock controller — uses the same PIDF coefficients tuned in
+    // pedroPathing/Constants.java for the follower's heading loop.
+    private final PIDFController headingLockController =
+            new PIDFController(new PIDFCoefficients(0.6, 0, 0, 0));
 
     // ==================== LED VARIABLES ====================
     private GoBildaPrismDriver prism = null;
@@ -140,6 +158,7 @@ public class RED extends OpMode {
     private PrismAnimations.Solid solidCyan = new PrismAnimations.Solid(Color.CYAN);
     private PrismAnimations.Blink blinkBlueWhite = new PrismAnimations.Blink(Color.BLUE, Color.WHITE);
     private PrismAnimations.Snakes swirlAnimation = new PrismAnimations.Snakes(Color.BLUE, Color.CYAN, Color.WHITE);
+    private PrismAnimations.SineWave blueWaveAnimation = new PrismAnimations.SineWave(Color.BLUE, Color.TRANSPARENT);
 
     private boolean isIntakeRunning = false;
     private boolean isIntakeReversing = false;
@@ -186,10 +205,43 @@ public class RED extends OpMode {
                 VelocityShotSetpoint.getHeading()
         );
 
-        // Initialize HeatMap controller
+
         heatMapController = new HeatMapController(prism);
 
-        // Configure LED animations
+        heatMapController.addShotPose(114.4184,132.0035,Math.toRadians(12.82));
+        heatMapController.addShotPose(116.4101,122.9897,Math.toRadians(25.43));
+        heatMapController.addShotPose(119.3829,125.1452,Math.toRadians(16.94));
+        heatMapController.addShotPose(118.9329,127.6452,Math.toRadians(17.06));
+        heatMapController.addShotPose(118.7867,130.0832,Math.toRadians(23.46));
+        heatMapController.addShotPose(118.5060,130.0316,Math.toRadians(28.96));
+        heatMapController.addShotPose(122.3506,128.2685,Math.toRadians(30.23));
+        heatMapController.addShotPose(124.2448,125.5624,Math.toRadians(29.34));
+        heatMapController.addShotPose(123.6228,118.8057,Math.toRadians(46.40));
+        heatMapController.addShotPose(123.8874,119.6107,Math.toRadians(46.08));
+        heatMapController.addShotPose(123.5328,122.5747,Math.toRadians(42.67));
+        heatMapController.addShotPose(114.6971,129.0082,Math.toRadians(20.53));
+        heatMapController.addShotPose(118.6083,118.8968,Math.toRadians(32.71));
+        heatMapController.addShotPose(118.5951,120.0957,Math.toRadians(30.18));
+        heatMapController.addShotPose(112.1078,125.5669,Math.toRadians(25.59));
+        heatMapController.addShotPose(120.6168,123.0275,Math.toRadians(43.28));
+        heatMapController.addShotPose(119.5159,127.1542,Math.toRadians(39.01));
+        heatMapController.addShotPose(120.1838,117.4008,Math.toRadians(51.04));
+        heatMapController.addShotPose(119.4322,122.8069,Math.toRadians(35.91));
+        heatMapController.addShotPose(120.6674,122.1943,Math.toRadians(30.05));
+        heatMapController.addShotPose(119.9719,127.8185,Math.toRadians(24.27));
+        heatMapController.addShotPose(117.5773,129.8076,Math.toRadians(16.27));
+        heatMapController.addShotPose(117.6494,127.7719,Math.toRadians(8.41));
+        heatMapController.addShotPose(115.0767,133.7463,Math.toRadians(0.43));
+        heatMapController.addShotPose(123.7709,124.9373,Math.toRadians(42.67));
+        heatMapController.addShotPose(120.3936,125.1025,Math.toRadians(33.92));
+        heatMapController.addShotPose(120.3229,120.0176,Math.toRadians(43.23));
+        heatMapController.addShotPose(126.0496,114.5735,Math.toRadians(56.26));
+        heatMapController.addShotPose(125.2238,118.1025,Math.toRadians(61.06));
+        heatMapController.addShotPose(119.8480,124.7540,Math.toRadians(43.36));
+        heatMapController.addShotPose(119.59, 126.45, Math.toRadians(7.72));
+
+
+
         solidRed.setBrightness(100);
         solidBlue.setBrightness(100);
         solidWhite.setBrightness(100);
@@ -205,6 +257,11 @@ public class RED extends OpMode {
         swirlAnimation.setRepeatAfter(20);
         swirlAnimation.setBackgroundColor(Color.TRANSPARENT);
         swirlAnimation.setBrightness(100);
+
+        blueWaveAnimation.setPeriod(1200);
+        blueWaveAnimation.setSpeed(3f);
+        blueWaveAnimation.setOffset(0.5f);
+        blueWaveAnimation.setBrightness(100);
 
         telemetry.addData("Status", "Initialized");
         telemetry.update();
@@ -224,36 +281,45 @@ public class RED extends OpMode {
     public void loop() {
         follower.update();
         telemetryM.update();
-        LLResult result = camera.getLatestResult();
 
-        Pose3D botpose3D = result.getBotpose();
+        LLResult result = camera.getLatestResult();
         Pose currentPose = follower.getPose();
 
-        if (result != null && result.isValid()
-                && botpose3D != null
-                && result.getBotposeTagCount() > 0) {
-
-            Vector velocity = follower.getVelocity();
-            double angularVelocity = follower.getAngularVelocity();
-
-            double linearVelocity = Math.hypot(
-                    velocity.getXComponent(),
-                    velocity.getYComponent()
-            );
-
-            if (linearVelocity < 2 && Math.abs(angularVelocity) < 2) {
-
-                Pose limelightPose = LimelightPoseUpdater.convertLimelightToPedro(
-                        botpose3D.getPosition().x,
-                        botpose3D.getPosition().y,
-                        currentPose.getHeading()
+        if (result != null && result.isValid() && result.getBotposeTagCount() > 0) {
+            Pose3D botpose3D = result.getBotpose();
+            if (botpose3D != null) {
+                Vector velocity = follower.getVelocity();
+                double angularVelocity = follower.getAngularVelocity();
+                double linearVelocity = Math.hypot(
+                        velocity.getXComponent(),
+                        velocity.getYComponent()
                 );
 
-                follower.setPose(limelightPose);
+                // Overriding pose while a path is being followed makes the controller
+                // see a teleport and jerk. Only correct when the driver is in control.
+                boolean stationary = linearVelocity < 1.8 && Math.abs(angularVelocity) < 1.8;
+                if (stationary && !isNavigatingState()) {
+                    Pose limelightPose = LimelightPoseUpdater.convertLimelightToPedro(
+                            botpose3D.getPosition().x,
+                            botpose3D.getPosition().y,
+                            currentPose.getHeading()
+                    );
+
+                        follower.setPose(limelightPose);
+
+                }
             }
         }
 
-    updateLEDs();
+        if (heatMapController.update(follower)) {
+            currentLedMode = LedMode.HEATMAP;
+        } else {
+            if (currentLedMode == LedMode.HEATMAP) {
+                // Heatmap owned LAYER_0 until this frame — force the wave to re-insert.
+                currentLedMode = null;
+            }
+            setLedMode(LedMode.BLUE_WAVE);
+        }
 
         handleGlobalInput();
 
@@ -279,9 +345,10 @@ public class RED extends OpMode {
             case NAVIGATING_TO_TARGET_TWO:
                 handleNavigatingToTargetTwo();
                 break;
-            case NAVIGATING_TO_GATE:
-                handleNavigatingToGate();
-                break;
+            // Disabled — B is now heading lock, no path triggers this state.
+            // case NAVIGATING_TO_GATE:
+            //     handleNavigatingToGate();
+            //     break;
             case LAUNCHING_UP:
                 handleLaunchingUp();
                 break;
@@ -363,6 +430,12 @@ public class RED extends OpMode {
             case BLINK:
                 prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, blinkBlueWhite);
                 break;
+            case BLUE_WAVE:
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, blueWaveAnimation);
+                break;
+            case HEATMAP:
+                // Handled by HeatMapController
+                break;
         }
     }
 
@@ -404,6 +477,24 @@ public class RED extends OpMode {
         double dx = follower.getPose().getX() - goalPose.getX();
         double dy = follower.getPose().getY() - goalPose.getY();
         return Math.hypot(dx, dy);
+    }
+
+    // Fires a launch the instant distance, heading, and velocity are all in tolerance —
+    // don't wait on follower.isBusy() to settle, but don't shoot while still moving.
+    private boolean isReadyToLaunch(Pose target) {
+        Pose pose = follower.getPose();
+        double distance = Math.hypot(pose.getX() - target.getX(), pose.getY() - target.getY());
+        double rawErr = pose.getHeading() - target.getHeading();
+        double headingErr = Math.atan2(Math.sin(rawErr), Math.cos(rawErr));
+
+        Vector v = follower.getVelocity();
+        double speed = Math.hypot(v.getXComponent(), v.getYComponent());
+        double angularSpeed = Math.abs(follower.getAngularVelocity());
+
+        return distance < SETPOINT_TOLERANCE
+                && Math.abs(headingErr) < LAUNCH_HEADING_TOLERANCE
+                && speed < LAUNCH_MAX_LINEAR_SPEED
+                && angularSpeed < LAUNCH_MAX_ANGULAR_SPEED;
     }
 
     // ==================== STATE HANDLERS ====================
@@ -459,30 +550,85 @@ public class RED extends OpMode {
             startNavigationToTargetTwo();
             return;
         }
+        // B / Circle is now heading lock — handled below, not here.
+        // if (gamepad1.b) {
+        //     startNavigationToGate();
+        //     return;
+        // }
+
+        boolean driverInput = Math.abs(gamepad1.left_stick_y) > DRIVER_DEADZONE ||
+                Math.abs(gamepad1.left_stick_x) > DRIVER_DEADZONE ||
+                Math.abs(gamepad1.right_stick_x) > DRIVER_DEADZONE;
+
         if (gamepad1.b) {
-            startNavigationToGate();
-            return;
+            // Heading lock: ignore right stick, let PedroPathing's PIDF controller
+            // drive heading toward HEADING_LOCK_ANGLE.
+            if (isHoldingPosition) {
+                follower.startTeleopDrive();
+                isHoldingPosition = false;
+            }
+            double err = HEADING_LOCK_ANGLE - follower.getPose().getHeading();
+            err = Math.atan2(Math.sin(err), Math.cos(err));
+            headingLockController.updateError(err);
+            double rotation = Math.max(-1.0, Math.min(1.0, headingLockController.run()));
+            follower.setTeleOpDrive(
+                    -gamepad1.left_stick_y,
+                    -gamepad1.left_stick_x,
+                    rotation,
+                    false
+            );
+        } else if (driverInput) {
+            if (isHoldingPosition) {
+                follower.startTeleopDrive();
+                isHoldingPosition = false;
+            }
+            follower.setTeleOpDrive(
+                    -gamepad1.left_stick_y,
+                    -gamepad1.left_stick_x,
+                    -gamepad1.right_stick_x,
+                    false
+            );
+        } else if (isHoldingPosition) {
+            // If someone shoved the bot off the hold point, give up fighting and let
+            // it settle — otherwise the PID keeps driving "on its own" to return.
+            Pose p = follower.getPose();
+            double displacement = Math.hypot(
+                    p.getX() - lastHoldPose.getX(),
+                    p.getY() - lastHoldPose.getY()
+            );
+            double rawHeadingErr = p.getHeading() - lastHoldPose.getHeading();
+            double headingErr = Math.atan2(Math.sin(rawHeadingErr), Math.cos(rawHeadingErr));
+            if (displacement > HOLD_DISTURBANCE_DISTANCE
+                    || Math.abs(headingErr) > HOLD_DISTURBANCE_HEADING) {
+                follower.startTeleopDrive();
+                isHoldingPosition = false;
+            }
+        } else {
+            // Coast to rest before snapping the hold pose — capturing while the bot
+            // still has momentum makes the PID yank it backward.
+            Vector v = follower.getVelocity();
+            double speed = Math.hypot(v.getXComponent(), v.getYComponent());
+            if (speed < HOLD_CAPTURE_SPEED && Math.abs(follower.getAngularVelocity()) < HOLD_CAPTURE_ANGULAR_SPEED) {
+                startHoldingPosition();
+            } else {
+                follower.setTeleOpDrive(0, 0, 0, false);
+            }
         }
 
-        follower.setTeleOpDrive(
-                -gamepad1.left_stick_y,
-                -gamepad1.left_stick_x,
-                -gamepad1.right_stick_x,
-                false
-        );
-
         handleManualControls();
+    }
+
+    private void startHoldingPosition() {
+        Pose holdPose = follower.getPose();
+        follower.holdPoint(holdPose);
+        lastHoldPose = holdPose;
+        isHoldingPosition = true;
     }
 
     private void handleNavigatingToSetpoint() {
         if (checkForDriverInterruption()) return;
 
-        double distanceToTarget = Math.hypot(
-                follower.getPose().getX() - targetSetpoint.getX(),
-                follower.getPose().getY() - targetSetpoint.getY()
-        );
-
-        if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
+        if (isReadyToLaunch(targetSetpoint)) {
             changeState(RobotState.LAUNCHING_UP);
         }
     }
@@ -506,12 +652,7 @@ public class RED extends OpMode {
     private void handleNavigatingToTargetOne() {
         if (checkForDriverInterruption()) return;
 
-        double distanceToTarget = Math.hypot(
-                follower.getPose().getX() - targetOneSetpoint.getX(),
-                follower.getPose().getY() - targetOneSetpoint.getY()
-        );
-
-        if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
+        if (isReadyToLaunch(targetOneSetpoint)) {
             changeState(RobotState.LAUNCHING_UP);
         }
     }
@@ -519,27 +660,23 @@ public class RED extends OpMode {
     private void handleNavigatingToTargetTwo() {
         if (checkForDriverInterruption()) return;
 
-        double distanceToTarget = Math.hypot(
-                follower.getPose().getX() - targetTwoSetpoint.getX(),
-                follower.getPose().getY() - targetTwoSetpoint.getY()
-        );
-
-        if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
+        if (isReadyToLaunch(targetTwoSetpoint)) {
             changeState(RobotState.LAUNCHING_UP);
         }
     }
 
+    // Disabled — B is now heading lock.
     private void handleNavigatingToGate() {
-        if (checkForDriverInterruption()) return;
-
-        double distanceToTarget = Math.hypot(
-                follower.getPose().getX() - gateSetpoint.getX(),
-                follower.getPose().getY() - gateSetpoint.getY()
-        );
-
-        if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
-            changeState(RobotState.MANUAL_DRIVE);
-        }
+        // if (checkForDriverInterruption()) return;
+        //
+        // double distanceToTarget = Math.hypot(
+        //         follower.getPose().getX() - gateSetpoint.getX(),
+        //         follower.getPose().getY() - gateSetpoint.getY()
+        // );
+        //
+        // if (distanceToTarget < SETPOINT_TOLERANCE && !follower.isBusy()) {
+        //     changeState(RobotState.MANUAL_DRIVE);
+        // }
     }
 
     private void handleLaunchingUp() {
@@ -549,6 +686,8 @@ public class RED extends OpMode {
         handleIntakeDuringLaunch();
 
         if (stateTimer.seconds() >= LAUNCH_UP_DURATION) {
+            // Ball has left the catapult — hand the driver control for the down-stroke.
+            follower.startTeleopDrive();
             changeState(RobotState.LAUNCHING_DOWN);
         }
     }
@@ -559,6 +698,14 @@ public class RED extends OpMode {
 
         handleIntakeDuringLaunch();
 
+        // Drive normally while the catapult resets.
+        follower.setTeleOpDrive(
+                -gamepad1.left_stick_y,
+                -gamepad1.left_stick_x,
+                -gamepad1.right_stick_x,
+                false
+        );
+
         if (stateTimer.seconds() >= LAUNCH_DOWN_DURATION) {
             changeState(RobotState.LAUNCHING_HOLD);
         }
@@ -567,7 +714,6 @@ public class RED extends OpMode {
     private void handleLaunchingHold() {
         catapult1.setPower(CATAPULT_HOLD_POWER);
         catapult2.setPower(CATAPULT_HOLD_POWER);
-        follower.startTeleopDrive();
         changeState(RobotState.MANUAL_DRIVE);
     }
 
@@ -577,6 +723,9 @@ public class RED extends OpMode {
         previousState = currentState;
         currentState = newState;
         stateTimer.reset();
+        if (newState != RobotState.MANUAL_DRIVE) {
+            isHoldingPosition = false;
+        }
     }
 
     private void handleGlobalInput() {
@@ -754,19 +903,20 @@ public class RED extends OpMode {
         changeState(RobotState.NAVIGATING_TO_TARGET_TWO);
     }
 
+    // Disabled — B is now heading lock.
     private void startNavigationToGate() {
-        PathChain gatePath = follower.pathBuilder()
-                .addPath(new Path(new BezierLine(new Pose(follower.getPose().getX(),
-                        follower.getPose().getY(), follower.getHeading()), gateWaypoint)))
-                .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
-                        follower::getHeading, gateWaypoint.getHeading(), 0.1))
-                .addPath(new Path(new BezierLine(gateWaypoint, gateSetpoint)))
-                .setHeadingInterpolation(HeadingInterpolator.linear(
-                        gateWaypoint.getHeading(), gateSetpoint.getHeading()))
-                .build();
-
-        follower.followPath(gatePath);
-        changeState(RobotState.NAVIGATING_TO_GATE);
+        // PathChain gatePath = follower.pathBuilder()
+        //         .addPath(new Path(new BezierLine(new Pose(follower.getPose().getX(),
+        //                 follower.getPose().getY(), follower.getHeading()), gateWaypoint)))
+        //         .setHeadingInterpolation(HeadingInterpolator.linearFromPoint(
+        //                 follower::getHeading, gateWaypoint.getHeading(), 0.1))
+        //         .addPath(new Path(new BezierLine(gateWaypoint, gateSetpoint)))
+        //         .setHeadingInterpolation(HeadingInterpolator.linear(
+        //                 gateWaypoint.getHeading(), gateSetpoint.getHeading()))
+        //         .build();
+        //
+        // follower.followPath(gatePath);
+        // changeState(RobotState.NAVIGATING_TO_GATE);
     }
 
     private void updateTelemetry() {
@@ -794,12 +944,40 @@ public class RED extends OpMode {
         telemetry.addData("LED Mode", currentLedMode != null ? currentLedMode.toString() : "NONE");
         telemetry.addData("Velocity Shot Tolerance", "%.0f", velocityShotTolerance);
 
-        // Add HeatMap telemetry
+        // Live pose — copy these into addShotPose(...) when you find a spot that scores.
+        Pose pose = follower.getPose();
+        telemetry.addData("Pose X", "%.2f", pose.getX());
+        telemetry.addData("Pose Y", "%.2f", pose.getY());
+        telemetry.addData("Pose Heading (deg)", "%.2f", Math.toDegrees(pose.getHeading()));
+        telemetry.addData("Copy Shot Pose",
+                "new Pose(%.4f, %.4f, Math.toRadians(%.2f))",
+                pose.getX(), pose.getY(), Math.toDegrees(pose.getHeading()));
+
+        // HeatMap telemetry
         telemetry.addData("HeatMap Active", heatMapController.isActive() ? "YES" : "NO");
-        telemetry.addData("HeatMap RGB", String.format("R:%d G:%d B:%d",
+        telemetry.addData("HeatMap Shot Ready", heatMapController.isShotReady() ? "YES" : "NO");
+        telemetry.addData("Nearest Shot Index", heatMapController.getClosestShotIndex());
+        telemetry.addData("Blending Segment",
+                "A=%d  B=%d  t=%.2f",
+                heatMapController.getSegmentAIndex(),
+                heatMapController.getSegmentBIndex(),
+                heatMapController.getSegmentT());
+        Pose closest = heatMapController.getClosestShotPose();
+        if (closest != null) {
+            telemetry.addData("Effective Shot Pose",
+                    "X:%.2f Y:%.2f H:%.2f",
+                    closest.getX(), closest.getY(), Math.toDegrees(closest.getHeading()));
+        }
+        telemetry.addData("Dist to Segment", "%.2f", heatMapController.getClosestDistance());
+        telemetry.addData("Heading Error (deg)", "%.2f", heatMapController.getHeadingErrorDeg());
+        telemetry.addData("Pos OK / Head OK",
+                "%s / %s",
+                heatMapController.isPositionOk() ? "YES" : "no",
+                heatMapController.isHeadingOk() ? "YES" : "no");
+        telemetry.addData("HeatMap RGB", "R:%d G:%d B:%d",
                 heatMapController.getCurrentR(),
                 heatMapController.getCurrentG(),
-                heatMapController.getCurrentB()));
+                heatMapController.getCurrentB());
 
         telemetry.update();
     }

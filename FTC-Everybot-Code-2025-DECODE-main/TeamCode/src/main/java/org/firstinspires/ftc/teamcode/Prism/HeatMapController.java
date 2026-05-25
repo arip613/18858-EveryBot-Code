@@ -1,6 +1,11 @@
 package org.firstinspires.ftc.teamcode.Prism;
+
 import com.pedropathing.follower.Follower;
 import com.pedropathing.geometry.Pose;
+
+import java.util.ArrayList;
+import java.util.List;
+
 import static org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeight;
 
 // CLASS MADE BY JADEN
@@ -8,179 +13,258 @@ import static org.firstinspires.ftc.teamcode.Prism.GoBildaPrismDriver.LayerHeigh
 // "will anyone even read this, sometimes i feel like im typing to nobody, actually ive decided this is my diary now"
 
 /**
- * Handles proximity-based LED feedback for manual driving mode.
- * Shows discrete color steps based on distance to target (within 40 inches):
- * Red -> Orange -> Yellow -> Yellow-Green -> Light Green -> Full Green
- * Blinks when heading is aligned (within 10 degrees).
+ * Shot-confidence LED feedback driven by a table of "known good" shot poses.
+ * Each update() picks whichever shot pose the robot is closest to and drives
+ * the LEDs off that pose. Inside PROXIMITY_THRESHOLD the color fades smoothly
+ * from red (edge of range) to green (at the setpoint). The LEDs pulse only
+ * when BOTH the position AND heading are inside their tight tolerances.
  */
 public class HeatMapController {
 
-    private static final double PROXIMITY_THRESHOLD = 40; // inches
-    private static final double HEADING_TOLERANCE = Math.toRadians(10);
+    private static final double PROXIMITY_THRESHOLD = 8.0; // inches — gradient range
+    private static final double POSITION_TOLERANCE = 3.0;   // inches — needed for pulse
+    private static final double HEADING_TOLERANCE = Math.toRadians(12);
 
-    // Discrete color thresholds (distances from target)
-    private static final double[] DISTANCE_THRESHOLDS = {33.3, 26.6, 20.0, 13.3, 6.6, 0.0};
+    private static final int PULSE_PERIOD_MS = 250;
+    private static final int PULSE_ON_PERIOD_MS = 125;
 
-    // RGB values for each color step
-    private static final int[][] COLORS = {
-            {255, 0, 0},      // Red
-            {255, 165, 0},    // Orange
-            {255, 255, 0},    // Yellow
-            {154, 205, 50},   // Yellow-Green
-            {144, 238, 144},  // Light Green
-            {0, 255, 0}       // Full Green
-    };
+    private final GoBildaPrismDriver prism;
+    private final PrismAnimations.Solid solid;
+    private final PrismAnimations.Blink pulse;
 
-    // Blink settings
-    private static final double BLINK_PERIOD_MS = 300;
-    private static final double BLINK_ON_PERIOD_MS = 150;
+    private final List<Pose> shotPoses = new ArrayList<>();
 
-    // ==================== STATE VARIABLES ====================
     private int currentR = 255;
     private int currentG = 0;
     private int currentB = 0;
 
     private boolean isActive = false;
-    private boolean wasAlignedLastFrame = false;
+    private boolean wasActive = false;
+    private boolean wasPulsing = false;
 
-    // ==================== HARDWARE ====================
-    private GoBildaPrismDriver prism;
-    private PrismAnimations.Solid proximitySolid;
-    private PrismAnimations.Blink proximityBlink;
+    // Snapshot from the latest update() — for telemetry.
+    private Pose lastPose = null;
+    private Pose lastClosest = null;
+    private int lastClosestIndex = -1;
+    private double lastDistance = Double.NaN;
+    private double lastHeadingErrorDeg = Double.NaN;
+    private boolean lastPositionOk = false;
+    private boolean lastHeadingOk = false;
+    private int lastSegmentA = -1;
+    private int lastSegmentB = -1;
+    private double lastSegmentT = Double.NaN;
 
-    // ==================== CONSTRUCTOR ====================
     public HeatMapController(GoBildaPrismDriver prism) {
         this.prism = prism;
 
-        // Initialize solid animation for color display
-        proximitySolid = new PrismAnimations.Solid(new Color(255, 0, 0));
-        proximitySolid.setBrightness(100);
+        solid = new PrismAnimations.Solid(new Color(255, 0, 0));
+        solid.setBrightness(100);
 
-        // Initialize blink animation (will update colors dynamically)
-        proximityBlink = new PrismAnimations.Blink(new Color(255, 0, 0), new Color(0, 0, 0));
-        proximityBlink.setBrightness(100);
-        proximityBlink.setPeriod((int) BLINK_PERIOD_MS);
-        proximityBlink.setPrimaryColorPeriod((int) BLINK_ON_PERIOD_MS);
+        pulse = new PrismAnimations.Blink(new Color(255, 0, 0), new Color(0, 0, 0));
+        pulse.setBrightness(100);
+        pulse.setPeriod(PULSE_PERIOD_MS);
+        pulse.setPrimaryColorPeriod(PULSE_ON_PERIOD_MS);
     }
 
-    // ==================== PUBLIC METHODS ====================
+    // ==================== SHOT POSE TABLE ====================
+
+    public void addShotPose(Pose pose) {
+        shotPoses.add(pose);
+    }
+
+    public void addShotPose(double x, double y, double headingRadians) {
+        shotPoses.add(new Pose(x, y, headingRadians));
+    }
+
+    public void clearShotPoses() {
+        shotPoses.clear();
+    }
+
+    public List<Pose> getShotPoses() {
+        return shotPoses;
+    }
+
+    // ==================== UPDATE ====================
 
     /**
-     * Updates the heatmap LED display based on current position and target.
-     * @param follower The robot's follower instance
-     * @param targetPose The target pose to navigate to
-     * @return true if heatmap is active (within threshold), false otherwise
+     * Interpolates between shot poses: projects the robot onto the nearest segment
+     * between any two registered poses and drives the LEDs off that projection.
+     * Heading lerps linearly along the segment. With one registered pose, falls
+     * back to point distance.
+     * @return true while the heatmap owns the LED layer; false when out of range or empty.
      */
-    public boolean update(Follower follower, Pose targetPose) {
+    public boolean update(Follower follower) {
         Pose currentPose = follower.getPose();
+        lastPose = currentPose;
 
-        // Calculate distance to target
-        double dx = currentPose.getX() - targetPose.getX();
-        double dy = currentPose.getY() - targetPose.getY();
-        double distance = Math.hypot(dx, dy);
+        if (shotPoses.isEmpty()) {
+            deactivate();
+            lastClosest = null;
+            lastClosestIndex = -1;
+            lastDistance = Double.NaN;
+            lastHeadingErrorDeg = Double.NaN;
+            lastSegmentA = -1;
+            lastSegmentB = -1;
+            lastSegmentT = Double.NaN;
+            return false;
+        }
 
-        if (distance > PROXIMITY_THRESHOLD) {
-            isActive = false;
-            wasAlignedLastFrame = false;
+        double rx = currentPose.getX();
+        double ry = currentPose.getY();
+
+        double effX, effY, effHeading, effDistance;
+        int nearestEndpoint;
+        int segA = -1, segB = -1;
+        double segT = Double.NaN;
+
+        if (shotPoses.size() == 1) {
+            Pose p = shotPoses.get(0);
+            effX = p.getX();
+            effY = p.getY();
+            effHeading = p.getHeading();
+            effDistance = Math.hypot(rx - effX, ry - effY);
+            nearestEndpoint = 0;
+        } else {
+            double bestDist = Double.MAX_VALUE;
+            double bestEx = 0, bestEy = 0, bestEh = 0, bestT = 0;
+            int bestA = 0, bestB = 1;
+            for (int i = 0; i < shotPoses.size(); i++) {
+                for (int j = i + 1; j < shotPoses.size(); j++) {
+                    Pose A = shotPoses.get(i);
+                    Pose B = shotPoses.get(j);
+                    double ax = A.getX(), ay = A.getY();
+                    double dx = B.getX() - ax, dy = B.getY() - ay;
+                    double segLen2 = dx * dx + dy * dy;
+                    double t;
+                    if (segLen2 < 1e-9) {
+                        t = 0;
+                    } else {
+                        t = ((rx - ax) * dx + (ry - ay) * dy) / segLen2;
+                        if (t < 0) t = 0;
+                        else if (t > 1) t = 1;
+                    }
+                    double px = ax + t * dx;
+                    double py = ay + t * dy;
+                    double d = Math.hypot(rx - px, ry - py);
+                    if (d < bestDist) {
+                        bestDist = d;
+                        bestEx = px;
+                        bestEy = py;
+                        bestEh = lerpAngle(A.getHeading(), B.getHeading(), t);
+                        bestT = t;
+                        bestA = i;
+                        bestB = j;
+                    }
+                }
+            }
+            effX = bestEx;
+            effY = bestEy;
+            effHeading = bestEh;
+            effDistance = bestDist;
+            segA = bestA;
+            segB = bestB;
+            segT = bestT;
+            nearestEndpoint = (bestT < 0.5) ? bestA : bestB;
+        }
+
+        double headingError = normalizeAngle(currentPose.getHeading() - effHeading);
+
+        lastClosest = new Pose(effX, effY, effHeading);
+        lastClosestIndex = nearestEndpoint;
+        lastDistance = effDistance;
+        lastHeadingErrorDeg = Math.toDegrees(headingError);
+        lastPositionOk = effDistance < POSITION_TOLERANCE;
+        lastHeadingOk = Math.abs(headingError) < HEADING_TOLERANCE;
+        lastSegmentA = segA;
+        lastSegmentB = segB;
+        lastSegmentT = segT;
+
+        if (effDistance > PROXIMITY_THRESHOLD) {
+            deactivate();
             return false;
         }
 
         isActive = true;
 
-        // Calculate heading error
-        double headingError = normalizeAngle(currentPose.getHeading() - targetPose.getHeading());
-        boolean isAligned = Math.abs(headingError) < HEADING_TOLERANCE;
+        // t = 0 at the edge of range (red), 1 at the setpoint (green).
+        double t = 1.0 - (effDistance / PROXIMITY_THRESHOLD);
+        if (t < 0) t = 0;
+        if (t > 1) t = 1;
 
-        // Determine color based on discrete distance thresholds
-        int colorIndex = 0;
-        for (int i = 0; i < DISTANCE_THRESHOLDS.length; i++) {
-            if (distance >= DISTANCE_THRESHOLDS[i]) {
-                colorIndex = i;
-                break;
-            }
-        }
+        currentR = (int) Math.round(255 * (1.0 - t));
+        currentG = (int) Math.round(255 * t);
+        currentB = 0;
 
-        // Set current color to the discrete step
-        currentR = COLORS[colorIndex][0];
-        currentG = COLORS[colorIndex][1];
-        currentB = COLORS[colorIndex][2];
+        // Pulse only when BOTH position and heading are inside tolerance.
+        boolean pulsing = lastPositionOk && lastHeadingOk;
 
-        // Update LED display based on alignment
-        boolean alignmentChanged = isAligned != wasAlignedLastFrame;
+        Color heat = new Color(currentR, currentG, currentB);
+        boolean animationChanged = !wasActive || pulsing != wasPulsing;
 
-        if (isAligned) {
-            // Blink the current proximity color
-            proximityBlink.setPrimaryColor(new Color(currentR, currentG, currentB));
-            proximityBlink.setSecondaryColor(new Color(0, 0, 0));
-
-            // Only re-insert when switching from solid to blink
-            if (alignmentChanged) {
-                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, proximityBlink);
+        if (pulsing) {
+            pulse.setPrimaryColor(heat);
+            pulse.setSecondaryColor(new Color(0, 0, 0));
+            if (animationChanged) {
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, pulse);
             } else {
-                // Update existing animation
                 prism.updateAnimationFromIndex(LayerHeight.LAYER_0);
             }
         } else {
-            // Solid proximity color
-            proximitySolid.setPrimaryColor(new Color(currentR, currentG, currentB));
-
-            // Always update when in solid mode or when transitioning
-            if (alignmentChanged || !wasAlignedLastFrame) {
-                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, proximitySolid);
+            solid.setPrimaryColor(heat);
+            if (animationChanged) {
+                prism.insertAndUpdateAnimation(LayerHeight.LAYER_0, solid);
             } else {
                 prism.updateAnimationFromIndex(LayerHeight.LAYER_0);
             }
         }
 
-        wasAlignedLastFrame = isAligned;
+        wasActive = true;
+        wasPulsing = pulsing;
         return true;
     }
 
-    /**
-     * @return true if the heatmap is currently active (robot is within proximity threshold)
-     */
-    public boolean isActive() {
-        return isActive;
-    }
+    // ==================== GETTERS ====================
 
-    /**
-     * @return Current red color value (0-255)
-     */
-    public int getCurrentR() {
-        return currentR;
-    }
+    public boolean isActive() { return isActive; }
+    public int getCurrentR() { return currentR; }
+    public int getCurrentG() { return currentG; }
+    public int getCurrentB() { return currentB; }
 
-    /**
-     * @return Current green color value (0-255)
-     */
-    public int getCurrentG() {
-        return currentG;
-    }
+    public Pose getLastPose() { return lastPose; }
+    public Pose getClosestShotPose() { return lastClosest; }
+    public int getClosestShotIndex() { return lastClosestIndex; }
+    public double getClosestDistance() { return lastDistance; }
+    public double getHeadingErrorDeg() { return lastHeadingErrorDeg; }
+    public boolean isPositionOk() { return lastPositionOk; }
+    public boolean isHeadingOk() { return lastHeadingOk; }
+    public boolean isShotReady() { return lastPositionOk && lastHeadingOk; }
+    public int getSegmentAIndex() { return lastSegmentA; }
+    public int getSegmentBIndex() { return lastSegmentB; }
+    public double getSegmentT() { return lastSegmentT; }
 
-    /**
-     * @return Current blue color value (0-255)
-     */
-    public int getCurrentB() {
-        return currentB;
-    }
-
-    /**
-     * Resets the heatmap controller to its initial state
-     */
     public void reset() {
-        isActive = false;
-        wasAlignedLastFrame = false;
+        deactivate();
         currentR = 255;
         currentG = 0;
         currentB = 0;
     }
 
-    /**
-     * Normalizes an angle to the range [-PI, PI]
-     */
-    private double normalizeAngle(double angle) {
+    // ==================== INTERNALS ====================
+
+    private void deactivate() {
+        isActive = false;
+        wasActive = false;
+        wasPulsing = false;
+    }
+
+    private static double normalizeAngle(double angle) {
         while (angle > Math.PI) angle -= 2 * Math.PI;
         while (angle < -Math.PI) angle += 2 * Math.PI;
         return angle;
+    }
+
+    private static double lerpAngle(double a, double b, double t) {
+        // Lerp the short-way delta so wrapping 359°→1° interpolates correctly.
+        return a + t * normalizeAngle(b - a);
     }
 }

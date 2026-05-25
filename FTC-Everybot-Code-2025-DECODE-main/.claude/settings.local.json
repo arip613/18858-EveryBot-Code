@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(cd /tmp)",
+      "Bash(unzip -q /c/Users/SPOON/.gradle/caches/modules-2/files-2.1/com.pedropathing/ftc/2.0.4/786a68df7706320529a5eafe529961bcf998b689/ftc-2.0.4-sources.jar)",
+      "Bash(unzip -q /c/Users/SPOON/.gradle/caches/modules-2/files-2.1/com.pedropathing/core/2.0.4/f1c15deb05d5c31523b46f71143aa7314b0811/core-2.0.4-sources.jar)"
+    ]
+  }
+}

@@ -61,8 +61,8 @@ public class BLUE15FORTESTING extends OpMode {
     private final Pose pickup3Pose = new Pose(53, 42, Math.toRadians(180));
     private final Pose pickup3EndPose = new Pose(18, 42, Math.toRadians(180));
     private final Pose gateStartPose = new Pose(46, 63, Math.toRadians(180));
-    private final Pose gateEndPose = new Pose(21.5, 69.5, Math.toRadians(180));
-    private final Pose gateAndIntakePose = new Pose(15, 64.443, Math.toRadians(154));
+    private final Pose gateEndPose = new Pose(124.7, 69.5, Math.toRadians(0)).mirror();
+    private final Pose gateAndIntakePose = new Pose(11.5, 64.443, Math.toRadians(154));
 
     private PathChain startToScore;
     private PathChain scoreToPickup2;
@@ -211,11 +211,13 @@ public class BLUE15FORTESTING extends OpMode {
                 if (!follower.isBusy()) {
                     launch();
                     setPathState(2);
+                    waitTimer.resetTimer();
+
                 }
                 break;
 
             case 2:
-                if (isCatapultReady()) {
+                if (isCatapultReady() &&  waitTimer.getElapsedTimeSeconds() > 0.2) {
                     intake.setPower(INTAKE_IN_POWER);
                     follower.followPath(scoreToPickup2, true);
                     setPathState(3);
